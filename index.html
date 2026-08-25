@@ -21,6 +21,10 @@
   @keyframes loadGlow { 0%, 100% { box-shadow: 0 0 20px rgba(58,143,212,0.3), 0 0 40px rgba(107,78,207,0.15); } 50% { box-shadow: 0 0 30px rgba(58,143,212,0.5), 0 0 60px rgba(107,78,207,0.3); } }
   @keyframes loadBar { 0% { width: 0; } 100% { width: 100%; } }
   @keyframes loadTextIn { 0% { opacity: 0; letter-spacing: 12px; } 100% { opacity: 1; letter-spacing: 5px; } }
+  @keyframes bannerSlide { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+  @media (prefers-reduced-motion: reduce) {
+    .banner-track { animation: none !important; }
+  }
   .hover-scale:hover { transform: scale(1.03); }
   .hover-scale:active { transform: scale(0.97); }
   .card:hover { transform: translateY(-6px) scale(1.01); box-shadow: 0 12px 28px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.06); }
@@ -28,6 +32,8 @@
   .wa-btn:active { transform: scale(0.97); }
   .fab:hover { transform: scale(1.1); }
   .fab:active { transform: scale(0.95); }
+  .carousel-arrow:hover { transform: translateY(-50%) scale(1.1) !important; background: rgba(0,0,0,0.55) !important; }
+  .carousel-arrow:active { transform: translateY(-50%) scale(0.95) !important; }
   .cat-tab:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
   .swatch:hover { transform: scale(1.1); }
   .admin-row:hover { border-color: #ddd !important; }
@@ -71,8 +77,8 @@
     [data-r="card-info"] { padding: 10px !important; }
     [data-r="card-info"] > div:nth-child(3) { font-size: 11px !important; }
     [data-r="card-actions"] { flex-direction: column !important; }
-    [data-r="cat-tabs"] { padding: 12px 16px !important; gap: 6px !important; }
-    [data-r="cat-tabs"] button { font-size: 12px !important; padding: 5px 12px !important; }
+    [data-r="cat-tabs"] { display: none !important; }
+    .mobile-cat-btn { display: flex !important; }
     [data-r="products-wrap"] { padding: 16px !important; }
     [data-r="banner"] { padding: 8px 16px !important; font-size: 12px !important; }
     [data-r="footer"] { padding: 20px 16px !important; }
@@ -134,6 +140,17 @@ function dbProductToUi(p) {
     zoom: p.image_zoom || 100
   };
 }
+function dbSuperOfferToUi(o) {
+  return {
+    id: String(o.id),
+    isActive: !!o.is_active,
+    productName: o.product_name || '',
+    description: o.description || '',
+    oldPrice: o.old_price != null ? String(o.old_price) : '',
+    price: o.sale_price != null ? String(o.sale_price) : '',
+    image: o.image_url || ''
+  };
+}
 function esc(str) {
   return String(str == null ? '' : str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -152,13 +169,10 @@ const state = {
   bannerActive: true,
   bannerText: '🔥 5% OFF en todos los productos — ¡Solo por tiempo limitado!',
   bannerBg: 'linear-gradient(90deg, #e74c3c, #c0392b)',
-  superOfferActive: false,
-  superOfferId: null,
-  superOfferDesc: '¡Aprovecha esta oferta exclusiva por tiempo limitado!',
-  superOfferImage: '',
-  superOfferPrice: '',
-  superOfferOldPrice: '',
-  superOfferProductName: '',
+  superOffers: [],
+  editingSuperOfferId: null,
+  superOfferIndex: 0,
+  soImage: '',
   whatsappNumber: WHATSAPP_NUMBER,
   loginError: false,
   loginBusy: false,
@@ -166,6 +180,7 @@ const state = {
   cart: [],
   cartOpen: false,
   lightboxProductId: null,
+  catMenuOpen: false,
   // admin form (uncontrolled inputs, values are read from the DOM; only bits that
   // don't live in a plain text input are tracked here)
   prodImage: '',
@@ -193,7 +208,7 @@ async function loadAll() {
       sb.from('categories').select('*').order('name'),
       sb.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }),
       sb.from('settings').select('*'),
-      sb.from('super_offer').select('*').limit(1),
+      sb.from('super_offer').select('*').order('created_at', { ascending: true }).limit(3),
       sb.auth.getSession()
     ]);
     if (catErr) console.error('[perfusky] error cargando categorías:', catErr);
@@ -212,16 +227,7 @@ async function loadAll() {
     if ('banner_text' in settingsMap) state.bannerText = settingsMap.banner_text;
     if ('banner_bg' in settingsMap) state.bannerBg = settingsMap.banner_bg;
 
-    const so = (superOffers || [])[0];
-    if (so) {
-      state.superOfferId = so.id;
-      state.superOfferActive = !!so.is_active;
-      state.superOfferProductName = so.product_name || '';
-      state.superOfferDesc = so.description || '';
-      state.superOfferOldPrice = so.old_price != null ? String(so.old_price) : '';
-      state.superOfferPrice = so.sale_price != null ? String(so.sale_price) : '';
-      state.superOfferImage = so.image_url || '';
-    }
+    state.superOffers = (superOffers || []).map(dbSuperOfferToUi);
   } catch (e) {
     console.error('[perfusky] fallo al cargar datos de Supabase:', e);
   }
@@ -237,23 +243,83 @@ async function saveBanner() {
   if (error) console.error('[perfusky] error guardando banner:', error);
 }
 
-async function saveSuperOfferData() {
+function resetSuperOfferForm() {
+  state.editingSuperOfferId = null;
+  state.soImage = '';
+  render();
+}
+
+function editSuperOffer(id) {
+  const o = state.superOffers.find(o => o.id === id);
+  if (!o) return;
+  state.editingSuperOfferId = id;
+  state.soImage = o.image || '';
+  render();
+  window.scrollTo({ top: document.querySelector('[data-r="admin-wrap"]').offsetTop, behavior: 'smooth' });
+}
+
+async function removeSuperOffer(id) {
+  const { error } = await sb.from('super_offer').delete().eq('id', id);
+  if (error) { console.error('[perfusky] error borrando super oferta:', error); return; }
+  state.superOffers = state.superOffers.filter(o => o.id !== id);
+  if (state.editingSuperOfferId === id) { state.editingSuperOfferId = null; state.soImage = ''; }
+  render();
+}
+
+async function toggleSuperOfferRowActive(id, checked) {
+  const { error } = await sb.from('super_offer').update({ is_active: checked }).eq('id', id);
+  if (error) { console.error('[perfusky] error actualizando super oferta:', error); return; }
+  const o = state.superOffers.find(o => o.id === id);
+  if (o) o.isActive = checked;
+  render();
+}
+
+async function saveSuperOfferClick() {
+  const name = document.getElementById('so-name').value.trim();
+  if (!name) return;
+  const desc = document.getElementById('so-desc').value;
+  const oldPrice = document.getElementById('so-old-price').value;
+  const price = document.getElementById('so-price').value;
   const payload = {
-    is_active: state.superOfferActive,
-    product_name: state.superOfferProductName,
-    description: state.superOfferDesc,
-    old_price: state.superOfferOldPrice || null,
-    sale_price: state.superOfferPrice || null,
-    image_url: state.superOfferImage || null
+    product_name: name,
+    description: desc,
+    old_price: oldPrice || null,
+    sale_price: price || null,
+    image_url: state.soImage || null
   };
-  if (state.superOfferId) {
-    const { error } = await sb.from('super_offer').update(payload).eq('id', state.superOfferId);
-    if (error) console.error('[perfusky] error guardando super oferta:', error);
+  const editingId = state.editingSuperOfferId;
+  if (editingId) {
+    const { data, error } = await sb.from('super_offer').update(payload).eq('id', editingId).select().single();
+    if (error) { console.error('[perfusky] error guardando super oferta:', error); return; }
+    state.superOffers = state.superOffers.map(o => o.id === editingId ? dbSuperOfferToUi(data) : o);
   } else {
-    const { data, error } = await sb.from('super_offer').insert(payload).select().single();
-    if (error) console.error('[perfusky] error creando super oferta:', error);
-    else state.superOfferId = data.id;
+    if (state.superOffers.length >= 3) return;
+    const { data, error } = await sb.from('super_offer').insert({ ...payload, is_active: true }).select().single();
+    if (error) { console.error('[perfusky] error creando super oferta:', error); return; }
+    state.superOffers.push(dbSuperOfferToUi(data));
   }
+  resetSuperOfferForm();
+}
+
+// Rebuilds only the super offer add/edit card, preserving unsaved input text
+// (a full render() would wipe it, same reasoning as refreshProductForm).
+function refreshSuperOfferForm() {
+  const card = document.getElementById('super-offer-form-card');
+  if (!card) { render(); return; }
+  const read = (id) => { const el = document.getElementById(id); return el ? el.value : undefined; };
+  const saved = {
+    'so-name': read('so-name'),
+    'so-desc': read('so-desc'),
+    'so-old-price': read('so-old-price'),
+    'so-price': read('so-price')
+  };
+  card.outerHTML = renderSuperOfferForm();
+  for (const [id, value] of Object.entries(saved)) {
+    if (value === undefined) continue;
+    const el = document.getElementById(id);
+    if (el) el.value = value;
+  }
+  initLucide();
 }
 
 async function uploadImage(file) {
@@ -464,11 +530,7 @@ async function onSuperOfferImageChange(e) {
   const file = e.target.files[0];
   if (!file) return;
   const url = await uploadImage(file);
-  if (url) {
-    state.superOfferImage = url;
-    await saveSuperOfferData();
-    render();
-  }
+  if (url) { state.soImage = url; refreshSuperOfferForm(); }
 }
 
 function setProdOnSale(checked) {
@@ -488,25 +550,10 @@ async function toggleBannerActive(checked) {
   await saveBanner();
 }
 
-async function toggleSuperOfferActive(checked) {
-  state.superOfferActive = checked;
-  render();
-  await saveSuperOfferData();
-}
-
 async function saveBannerTextClick() {
   state.bannerText = document.getElementById('banner-text-input').value;
   render();
   await saveBanner();
-}
-
-async function saveSuperOfferClick() {
-  state.superOfferProductName = document.getElementById('so-name').value;
-  state.superOfferDesc = document.getElementById('so-desc').value;
-  state.superOfferOldPrice = document.getElementById('so-old-price').value;
-  state.superOfferPrice = document.getElementById('so-price').value;
-  render();
-  await saveSuperOfferData();
 }
 
 // ---------- Render helpers ----------
@@ -523,6 +570,33 @@ function filteredProducts() {
     const matchSearch = !term || p.name.toLowerCase().includes(term) || (p.description || '').toLowerCase().includes(term);
     return matchCat && matchSearch;
   });
+}
+
+function activeSuperOffers() {
+  return state.superOffers.filter(o => o.isActive);
+}
+
+// Rebuilds only the super offer carousel, so autoplay/arrow clicks don't
+// disturb the rest of the catalog (cart, search, scroll position, etc.).
+function updateSuperOfferDOM() {
+  const wrap = document.getElementById('super-offer-wrap');
+  if (!wrap) return;
+  wrap.outerHTML = renderSuperOfferSection();
+  initLucide();
+}
+
+function goSuperOffer(delta) {
+  const count = activeSuperOffers().length;
+  if (count === 0) return;
+  state.superOfferIndex = ((state.superOfferIndex + delta) % count + count) % count;
+  updateSuperOfferDOM();
+}
+
+function goToSuperOffer(i) {
+  const count = activeSuperOffers().length;
+  if (count === 0) return;
+  state.superOfferIndex = ((i % count) + count) % count;
+  updateSuperOfferDOM();
 }
 
 function renderLoading() {
@@ -553,6 +627,9 @@ function renderHeader() {
           </div>
         </div>
         <div data-r="header-right" style="display: flex; align-items: center; gap: 14px">
+          <button data-action="toggle-cat-menu" class="mobile-cat-btn" style="display: none; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: white; align-items: center; justify-content: center; flex-shrink: 0">
+            <i data-lucide="menu" style="width: 18px; height: 18px"></i>
+          </button>
           <div style="position: relative">
             <input id="search-input" type="text" placeholder="Buscar productos..." style="padding: 10px 18px 10px 40px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.08); color: white; font-family: inherit; font-size: 13px; width: 240px; outline: none" data-r="search-input" value="${esc(state.searchTerm)}">
             <i data-lucide="search" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.4); width: 16px; height: 16px"></i>
@@ -566,56 +643,80 @@ function renderHeader() {
     </div>`;
 }
 
-function renderBanner() {
-  if (!state.bannerActive) return '';
+function renderMobileCatMenu() {
+  if (!state.catMenuOpen) return '';
+  const allSelected = !state.selectedCategory;
+  const rowStyle = (active) => `display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; padding: 14px 20px; background: none; border: none; border-bottom: 1px solid #f0f0f0; font-family: inherit; font-size: 14px; font-weight: ${active ? '600' : '400'}; color: ${active ? '#2d3436' : '#666'}`;
+  const checkIcon = `<i data-lucide="check" style="width: 16px; height: 16px; color: #2d3436"></i>`;
+  const items = state.categories.map(c => {
+    const active = state.selectedCategory === c.id;
+    return `<button data-action="select-cat-mobile" data-id="${c.id}" style="${rowStyle(active)}"><span>${esc(c.name)}</span>${active ? checkIcon : ''}</button>`;
+  }).join('');
   return `
-    <div data-r="banner" style="background: ${state.bannerBg}; color: white; padding: 10px 40px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px; font-weight: 600; letter-spacing: 1px; text-align: center">
-      <i data-lucide="sparkles" style="width: 16px; height: 16px; flex-shrink: 0"></i>
-      <span>${esc(state.bannerText)}</span>
-      <i data-lucide="sparkles" style="width: 16px; height: 16px; flex-shrink: 0"></i>
+    <div data-action="close-cat-menu" style="position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.4)"></div>
+    <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 151; background: white; border-radius: 0 0 16px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto; animation: fadeIn 0.2s ease">
+      <div style="padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between">
+        <span style="font-size: 14px; font-weight: 700; color: #2d3436; text-transform: uppercase; letter-spacing: 1px">Categorías</span>
+        <button data-action="close-cat-menu" class="link-btn" style="background: none; border: none; color: #aaa; font-size: 22px; line-height: 1; padding: 4px">×</button>
+      </div>
+      <button data-action="select-cat-mobile" data-id="" style="${rowStyle(allSelected)}"><span>Todos</span>${allSelected ? checkIcon : ''}</button>
+      ${items}
     </div>`;
 }
 
-function renderSuperOffer() {
-  if (!state.superOfferActive) return '';
-  const hasImage = !!state.superOfferImage;
-  const hasOldPrice = !!state.superOfferOldPrice;
-  const priceDisplay = state.superOfferPrice ? `$${state.superOfferPrice}` : '';
-  const oldPriceDisplay = state.superOfferOldPrice ? `$${state.superOfferOldPrice}` : '';
-  const soWa = waLink('Hola! Me interesa la SUPER OFERTA: ' + state.superOfferProductName);
-  const hasText = !!(state.superOfferProductName.trim() || state.superOfferDesc.trim() || state.superOfferPrice);
+function renderBanner() {
+  if (!state.bannerActive) return '';
+  const item = `
+    <span style="display: inline-flex; align-items: center; gap: 10px; padding: 0 40px">
+      <i data-lucide="sparkles" style="width: 16px; height: 16px; flex-shrink: 0"></i>
+      <span>${esc(state.bannerText)}</span>
+      <i data-lucide="sparkles" style="width: 16px; height: 16px; flex-shrink: 0"></i>
+    </span>`;
+  return `
+    <div data-r="banner" style="background: ${state.bannerBg}; color: white; padding: 10px 0; font-size: 14px; font-weight: 600; letter-spacing: 1px; overflow: hidden">
+      <div class="banner-track" style="display: inline-flex; white-space: nowrap; animation: bannerSlide 16s linear infinite">${item}${item}</div>
+    </div>`;
+}
+
+function superOfferSlide(o) {
+  const hasImage = !!o.image;
+  const hasOldPrice = !!o.oldPrice;
+  const priceDisplay = o.price ? `$${o.price}` : '';
+  const oldPriceDisplay = o.oldPrice ? `$${o.oldPrice}` : '';
+  const soWa = waLink('Hola! Me interesa la SUPER OFERTA: ' + o.productName);
+  const hasText = !!(o.productName.trim() || o.description.trim() || o.price);
 
   const priceBlock = `
     <div style="display: flex; align-items: baseline; gap: 10px">
-      ${hasOldPrice ? `<span style="color: rgba(255,255,255,0.3); font-size: 18px; text-decoration: line-through; font-weight: 500">${esc(oldPriceDisplay)}</span>` : ''}
-      <span style="color: #25d366; font-size: 32px; font-weight: 700; text-shadow: 0 2px 12px rgba(37,211,102,0.3)">${esc(priceDisplay)}</span>
+      ${hasOldPrice ? `<span style="color: rgba(255,255,255,0.3); font-size: 15px; text-decoration: line-through; font-weight: 500">${esc(oldPriceDisplay)}</span>` : ''}
+      <span style="color: #25d366; font-size: 24px; font-weight: 700; text-shadow: 0 2px 12px rgba(37,211,102,0.3)">${esc(priceDisplay)}</span>
     </div>`;
   const ctaBtn = `
-    <a href="${soWa}" target="_blank" class="wa-btn" style="background: #25d366; color: #fff; padding: 10px 24px 10px 14px; border-radius: 30px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; box-shadow: 0 4px 16px rgba(37,211,102,0.35); transition: background 0.3s, transform 0.2s">
-      <span style="width: 30px; height: 30px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="heart" style="width: 15px; height: 15px"></i></span> ¡Lo quiero!
+    <a href="${soWa}" target="_blank" class="wa-btn" style="background: #25d366; color: #fff; padding: 9px 20px 9px 12px; border-radius: 30px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 7px; text-decoration: none; box-shadow: 0 4px 16px rgba(37,211,102,0.35); transition: background 0.3s, transform 0.2s">
+      <span style="width: 26px; height: 26px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="heart" style="width: 13px; height: 13px"></i></span> ¡Lo quiero!
     </a>`;
 
   let body;
   if (hasImage) {
     body = `
       <div style="width: 100%; aspect-ratio: 16/9; overflow: hidden; position: relative">
-        <img src="${esc(state.superOfferImage)}" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s">
+        <img src="${esc(o.image)}" style="width: 100%; height: 100%; object-fit: cover">
         ${hasText ? `<div style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(10,10,10,0.95) 0%, rgba(10,10,10,0.4) 40%, transparent 70%); pointer-events: none"></div>
-        <div data-r="super-offer-text" style="position: absolute; bottom: 0; left: 0; right: 0; padding: 24px 28px; z-index: 1">
-          ${state.superOfferProductName.trim() ? `<div style="color: white; font-size: 24px; font-weight: 700; line-height: 1.2; margin-bottom: 6px; text-wrap: pretty">${esc(state.superOfferProductName)}</div>` : ''}
-          ${state.superOfferDesc.trim() ? `<div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.5; max-width: 500px">${esc(state.superOfferDesc)}</div>` : ''}
-          <div data-r="super-offer-prices" style="display: flex; align-items: center; gap: 16px; margin-top: 14px; flex-wrap: wrap">
-            ${state.superOfferPrice ? priceBlock : ''}
+        <div data-r="super-offer-text" style="position: absolute; bottom: 0; left: 0; right: 0; padding: 18px 20px; z-index: 1">
+          ${o.productName.trim() ? `<div style="color: white; font-size: 18px; font-weight: 700; line-height: 1.2; margin-bottom: 4px; text-wrap: pretty">${esc(o.productName)}</div>` : ''}
+          ${o.description.trim() ? `<div style="color: rgba(255,255,255,0.5); font-size: 12px; line-height: 1.4; max-width: 400px">${esc(o.description)}</div>` : ''}
+          <div data-r="super-offer-prices" style="display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap">
+            ${o.price ? priceBlock : ''}
             ${ctaBtn}
           </div>
         </div>` : ''}
       </div>`;
   } else {
     body = `
-      <div data-r="super-offer-text" style="padding: 40px 28px; z-index: 1; position: relative">
-        <div style="color: white; font-size: 24px; font-weight: 700; line-height: 1.2; margin-top: 28px; margin-bottom: 6px">${esc(state.superOfferProductName)}</div>
-        <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.5">${esc(state.superOfferDesc)}</div>
-        <div data-r="super-offer-prices" style="display: flex; align-items: center; gap: 16px; margin-top: 16px; flex-wrap: wrap">
+      <div data-r="super-offer-text" style="padding: 28px 20px; z-index: 1; position: relative">
+        <div style="color: white; font-size: 18px; font-weight: 700; line-height: 1.2; margin-top: 24px; margin-bottom: 4px">${esc(o.productName)}</div>
+        <div style="color: rgba(255,255,255,0.5); font-size: 12px; line-height: 1.4">${esc(o.description)}</div>
+        <div data-r="super-offer-prices" style="display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap">
           ${priceBlock}
           ${ctaBtn}
         </div>
@@ -623,14 +724,43 @@ function renderSuperOffer() {
   }
 
   return `
-    <div data-r="products-wrap" style="padding: 24px 40px 0">
-      <div style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 60%, #2d1b4e 100%); border-radius: 20px; overflow: hidden; position: relative; transition: transform 0.3s, box-shadow 0.3s">
-        <div style="position: absolute; top: -40px; right: -40px; width: 250px; height: 250px; background: radial-gradient(circle, rgba(232,99,43,0.12) 0%, transparent 70%); pointer-events: none"></div>
-        <div style="position: absolute; bottom: -30px; left: -30px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(58,143,212,0.08) 0%, transparent 70%); pointer-events: none"></div>
-        <div style="position: absolute; top: 16px; left: 16px; z-index: 2">
-          <span style="background: linear-gradient(135deg, #e74c3c, #e8632b); color: white; font-size: 12px; font-weight: 700; padding: 6px 16px; border-radius: 8px; text-transform: uppercase; letter-spacing: 1.5px; animation: loadPulse 2s ease-in-out infinite; box-shadow: 0 4px 12px rgba(231,76,60,0.4)">⚡ Super Oferta</span>
+    <div style="flex: 0 0 100%; min-width: 0">
+      <div style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 60%, #2d1b4e 100%); border-radius: 20px; overflow: hidden; position: relative">
+        <div style="position: absolute; top: -30px; right: -30px; width: 180px; height: 180px; background: radial-gradient(circle, rgba(232,99,43,0.12) 0%, transparent 70%); pointer-events: none"></div>
+        <div style="position: absolute; bottom: -24px; left: -24px; width: 150px; height: 150px; background: radial-gradient(circle, rgba(58,143,212,0.08) 0%, transparent 70%); pointer-events: none"></div>
+        <div style="position: absolute; top: 14px; left: 14px; z-index: 2">
+          <span style="background: linear-gradient(135deg, #e74c3c, #e8632b); color: white; font-size: 11px; font-weight: 700; padding: 5px 14px; border-radius: 8px; text-transform: uppercase; letter-spacing: 1.5px; animation: loadPulse 2s ease-in-out infinite; box-shadow: 0 4px 12px rgba(231,76,60,0.4)">⚡ Super Oferta</span>
         </div>
         ${body}
+      </div>
+    </div>`;
+}
+
+function renderSuperOfferSection() {
+  const offers = activeSuperOffers();
+  if (offers.length === 0) return '';
+  const count = offers.length;
+  const idx = ((state.superOfferIndex % count) + count) % count;
+  const track = offers.map(superOfferSlide).join('');
+  const arrows = count > 1 ? `
+    <button data-action="so-prev" class="carousel-arrow" style="position: absolute; top: 50%; left: 10px; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,0.4); border: none; display: flex; align-items: center; justify-content: center; z-index: 3">
+      <i data-lucide="chevron-left" style="width: 18px; height: 18px; color: white"></i>
+    </button>
+    <button data-action="so-next" class="carousel-arrow" style="position: absolute; top: 50%; right: 10px; transform: translateY(-50%); width: 34px; height: 34px; border-radius: 50%; background: rgba(0,0,0,0.4); border: none; display: flex; align-items: center; justify-content: center; z-index: 3">
+      <i data-lucide="chevron-right" style="width: 18px; height: 18px; color: white"></i>
+    </button>` : '';
+  const dots = count > 1 ? `
+    <div style="display: flex; justify-content: center; gap: 6px; margin-top: 12px">
+      ${offers.map((_, i) => `<button data-action="so-dot" data-index="${i}" style="width: ${i === idx ? '20px' : '7px'}; height: 7px; border-radius: 4px; border: none; background: ${i === idx ? '#2d3436' : '#ddd'}; cursor: pointer; transition: all 0.25s ease; padding: 0"></button>`).join('')}
+    </div>` : '';
+  return `
+    <div id="super-offer-wrap" data-r="products-wrap" style="padding: 24px 40px 0">
+      <div style="max-width: 640px; margin: 0 auto; position: relative">
+        <div style="overflow: hidden; border-radius: 20px">
+          <div style="display: flex; transition: transform 0.5s ease; transform: translateX(-${idx * 100}%)">${track}</div>
+        </div>
+        ${arrows}
+        ${dots}
       </div>
     </div>`;
 }
@@ -831,8 +961,9 @@ function renderCatalog() {
   return `
     <div style="min-height: 100vh; display: flex; flex-direction: column">
       ${renderHeader()}
+      ${renderMobileCatMenu()}
       ${renderBanner()}
-      ${renderSuperOffer()}
+      ${renderSuperOfferSection()}
       ${renderCatTabs()}
       <div id="grid-wrap" data-r="products-wrap" style="padding: 32px 40px">
         ${renderGrid()}
@@ -941,6 +1072,77 @@ function renderProductForm() {
         </div>`;
 }
 
+function renderSuperOfferList() {
+  if (state.superOffers.length === 0) {
+    return `<div style="text-align: center; padding: 16px; color: #ccc; font-size: 13px">Todavía no agregaste ninguna super oferta.</div>`;
+  }
+  return `
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px">
+      ${state.superOffers.map(o => `
+      <div class="admin-row" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #f0f0f0; border-radius: 8px; flex-wrap: wrap">
+        <div style="width: 56px; height: 56px; border-radius: 8px; background: #f0ece6; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center">
+          ${o.image ? `<img src="${esc(o.image)}" style="width: 100%; height: 100%; object-fit: cover">` : `<span style="color: #ccc; font-size: 20px">📷</span>`}
+        </div>
+        <div style="flex: 1; min-width: 120px">
+          <div style="font-size: 14px; font-weight: 500">${esc(o.productName || '(sin nombre)')}</div>
+          <div style="font-size: 12px; color: #aaa">${o.price ? esc('$' + o.price) : 'Sin precio'}</div>
+        </div>
+        <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #666">
+          <input type="checkbox" data-action="toggle-so-active" data-id="${o.id}" ${o.isActive ? 'checked' : ''} style="accent-color: #e74c3c; width: 15px; height: 15px; cursor: pointer">
+          Activa
+        </label>
+        <div style="display: flex; gap: 4px">
+          <button data-action="edit-super-offer" data-id="${o.id}" class="link-btn" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: inherit; color: #666">Editar</button>
+          <button data-action="remove-super-offer" data-id="${o.id}" class="danger-btn" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: inherit; color: #e74c3c">Eliminar</button>
+        </div>
+      </div>`).join('')}
+    </div>`;
+}
+
+function renderSuperOfferForm() {
+  const editing = state.editingSuperOfferId ? state.superOffers.find(o => o.id === state.editingSuperOfferId) : null;
+  const atLimit = state.superOffers.length >= 3 && !editing;
+  if (atLimit) {
+    return `<div id="super-offer-form-card" style="font-size: 13px; color: #aaa; padding: 12px; background: #f8f8f8; border-radius: 8px; text-align: center">Ya hay 3 super ofertas cargadas (máximo). Eliminá una para agregar otra.</div>`;
+  }
+  return `
+    <div id="super-offer-form-card" style="display: flex; flex-direction: column; gap: 12px">
+      <div>
+        <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Nombre del producto</label>
+        <input id="so-name" type="text" placeholder="ej. Perfume Exclusivo 100ml" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${editing ? esc(editing.productName) : ''}">
+      </div>
+      <div>
+        <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Descripción</label>
+        <input id="so-desc" type="text" placeholder="Descripción de la oferta..." style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${editing ? esc(editing.description) : ''}">
+      </div>
+      <div style="display: flex; gap: 12px">
+        <div style="flex: 1">
+          <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Precio anterior</label>
+          <input id="so-old-price" type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${editing ? esc(editing.oldPrice) : ''}">
+        </div>
+        <div style="flex: 1">
+          <label style="font-size: 12px; font-weight: 600; color: #e74c3c; margin-bottom: 4px; display: block">Precio oferta</label>
+          <input id="so-price" type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #fce4e4; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; background: #fdf8f8" value="${editing ? esc(editing.price) : ''}">
+        </div>
+      </div>
+      <div>
+        <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Imagen</label>
+        <div style="display: flex; align-items: center; gap: 12px">
+          <label class="file-label" style="padding: 10px 20px; background: #f0ece6; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; color: #2d3436; display: inline-flex; align-items: center; gap: 6px">
+            <i data-lucide="upload" style="width: 14px; height: 14px"></i> Elegir imagen
+            <input type="file" accept="image/*" data-action="so-image" style="display: none">
+          </label>
+          <span style="font-size: 11px; color: #aaa">Formato 16:9 (ej. 1280×720px)</span>
+          ${state.soImage ? `<img src="${esc(state.soImage)}" style="width: 120px; aspect-ratio: 16/9; border-radius: 8px; object-fit: cover">` : ''}
+        </div>
+      </div>
+      <div style="display: flex; gap: 8px">
+        <button data-action="save-super-offer" class="save-btn" style="background: #2d3436; color: white; border: none; padding: 9px 22px 9px 12px; border-radius: 30px; font-family: inherit; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); align-self: flex-start"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="save" style="width: 13px; height: 13px"></i></span> ${editing ? 'Guardar Cambios' : 'Agregar Super Oferta'}</button>
+        ${editing ? `<button data-action="cancel-edit-super-offer" class="cancel-btn" style="background: none; border: 1px solid #ddd; color: #888; padding: 10px 24px; border-radius: 8px; font-family: inherit; font-size: 13px">Cancelar</button>` : ''}
+      </div>
+    </div>`;
+}
+
 function renderAdmin() {
   return `
     <div style="min-height: 100vh; background: #f5f5f5">
@@ -983,47 +1185,12 @@ function renderAdmin() {
             </div>
           </div>
         </div>
-        <!-- SUPER OFERTA -->
+        <!-- SUPER OFERTAS -->
         <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
-          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
-            <div style="font-size: 16px; font-weight: 600">⭐ Super Oferta Destacada</div>
-            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #666">
-              <input type="checkbox" data-action="toggle-super-offer" ${state.superOfferActive ? 'checked' : ''} style="accent-color: #e74c3c; width: 16px; height: 16px; cursor: pointer">
-              Activa
-            </label>
-          </div>
-          <div style="display: flex; flex-direction: column; gap: 12px">
-            <div>
-              <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Nombre del producto</label>
-              <input id="so-name" type="text" placeholder="ej. Perfume Exclusivo 100ml" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${esc(state.superOfferProductName)}">
-            </div>
-            <div>
-              <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Descripción</label>
-              <input id="so-desc" type="text" placeholder="Descripción de la oferta..." style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${esc(state.superOfferDesc)}">
-            </div>
-            <div style="display: flex; gap: 12px">
-              <div style="flex: 1">
-                <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Precio anterior</label>
-                <input id="so-old-price" type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${esc(state.superOfferOldPrice)}">
-              </div>
-              <div style="flex: 1">
-                <label style="font-size: 12px; font-weight: 600; color: #e74c3c; margin-bottom: 4px; display: block">Precio oferta</label>
-                <input id="so-price" type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #fce4e4; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; background: #fdf8f8" value="${esc(state.superOfferPrice)}">
-              </div>
-            </div>
-            <div>
-              <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Imagen</label>
-              <div style="display: flex; align-items: center; gap: 12px">
-                <label class="file-label" style="padding: 10px 20px; background: #f0ece6; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; color: #2d3436; display: inline-flex; align-items: center; gap: 6px">
-                  <i data-lucide="upload" style="width: 14px; height: 14px"></i> Elegir imagen
-                  <input type="file" accept="image/*" data-action="so-image" style="display: none">
-                </label>
-                <span style="font-size: 11px; color: #aaa">Formato 16:9 (ej. 1280×720px)</span>
-                ${state.superOfferImage ? `<img src="${esc(state.superOfferImage)}" style="width: 120px; aspect-ratio: 16/9; border-radius: 8px; object-fit: cover">` : ''}
-              </div>
-            </div>
-            <button data-action="save-super-offer" class="save-btn" style="background: #2d3436; color: white; border: none; padding: 9px 22px 9px 12px; border-radius: 30px; font-family: inherit; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); align-self: flex-start"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="save" style="width: 13px; height: 13px"></i></span> Guardar Super Oferta</button>
-          </div>
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px">⭐ Super Ofertas Destacadas</div>
+          <div style="font-size: 12px; color: #aaa; margin-bottom: 16px">Hasta 3 ofertas. Si hay más de una activa, se muestran en un carrusel en el catálogo.</div>
+          ${renderSuperOfferList()}
+          ${renderSuperOfferForm()}
         </div>
         <!-- CATEGORÍAS -->
         <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
@@ -1087,6 +1254,9 @@ app.addEventListener('click', (e) => {
   const id = el.dataset.id;
   switch (action) {
     case 'select-cat': setState({ selectedCategory: id || null }); break;
+    case 'toggle-cat-menu': setState({ catMenuOpen: !state.catMenuOpen }); break;
+    case 'close-cat-menu': setState({ catMenuOpen: false }); break;
+    case 'select-cat-mobile': setState({ selectedCategory: id || null, catMenuOpen: false }); break;
     case 'add-to-cart': addToCart(id); break;
     case 'toggle-cart': setState({ cartOpen: !state.cartOpen }); break;
     case 'close-cart': setState({ cartOpen: false }); break;
@@ -1100,6 +1270,12 @@ app.addEventListener('click', (e) => {
     case 'set-banner-bg': setBannerBg(el.dataset.bg); break;
     case 'save-banner-text': saveBannerTextClick(); break;
     case 'save-super-offer': saveSuperOfferClick(); break;
+    case 'edit-super-offer': editSuperOffer(id); break;
+    case 'remove-super-offer': removeSuperOffer(id); break;
+    case 'cancel-edit-super-offer': resetSuperOfferForm(); break;
+    case 'so-prev': goSuperOffer(-1); break;
+    case 'so-next': goSuperOffer(1); break;
+    case 'so-dot': goToSuperOffer(parseInt(el.dataset.index, 10)); break;
     case 'add-category': addCategory(); break;
     case 'remove-category': removeCategory(id); break;
     case 'edit-product': editProduct(id); break;
@@ -1116,7 +1292,7 @@ app.addEventListener('change', (e) => {
   if (el) {
     const action = el.dataset.action;
     if (action === 'toggle-banner') { toggleBannerActive(el.checked); return; }
-    if (action === 'toggle-super-offer') { toggleSuperOfferActive(el.checked); return; }
+    if (action === 'toggle-so-active') { toggleSuperOfferRowActive(el.dataset.id, el.checked); return; }
     if (action === 'toggle-prod-sale') { setProdOnSale(el.checked); return; }
     if (action === 'prod-image') { onProdImageChange(e); return; }
     if (action === 'so-image') { onSuperOfferImageChange(e); return; }
@@ -1163,6 +1339,14 @@ document.addEventListener('keydown', (e) => {
   sb.auth.onAuthStateChange((_event, session) => {
     state.isAuthed = !!session;
   });
+
+  setInterval(() => {
+    const count = activeSuperOffers().length;
+    if (count > 1 && document.getElementById('super-offer-wrap')) {
+      state.superOfferIndex = (state.superOfferIndex + 1) % count;
+      updateSuperOfferDOM();
+    }
+  }, 5000);
 })();
 </script>
 </body>
