@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Poppins', sans-serif; background: #faf9f7; color: #2d3436; }
+    a { color: #d4a574; text-decoration: none; }
+    a:hover { color: #b8895f; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    [data-r="grid"] > div:hover [data-r="card-img"] img { transform: scale(1.08) !important; transition: transform 0.5s ease !important; }
+    [data-r="card-img"] img { transition: transform 0.5s ease; }
+    @keyframes spinIcon { to { transform: rotate(250deg); } }
+    @keyframes loadPulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.08); opacity: 0.8; } }
+    @keyframes loadGlow { 0%, 100% { box-shadow: 0 0 20px rgba(58,143,212,0.3), 0 0 40px rgba(107,78,207,0.15); } 50% { box-shadow: 0 0 30px rgba(58,143,212,0.5), 0 0 60px rgba(107,78,207,0.3); } }
+    @keyframes loadBar { 0% { width: 0; } 100% { width: 100%; } }
+    @keyframes loadFadeOut { 0% { opacity: 1; } 100% { opacity: 0; pointer-events: none; } }
+    @keyframes loadTextIn { 0% { opacity: 0; letter-spacing: 12px; } 100% { opacity: 1; letter-spacing: 5px; } }
+    /* Tablet */
+    @media (max-width: 1024px) {
+      [data-r="header-inner"] { padding: 16px 20px 14px !important; }
+      [data-r="header-logo"] { height: 52px !important; width: 52px !important; }
+      [data-r="header-brand"] { font-size: 22px !important; letter-spacing: 3px !important; }
+      [data-r="header-right"] { gap: 10px !important; }
+      [data-r="search-input"] { width: 180px !important; }
+      [data-r="contact-btn"] > span:last-child { display: none !important; }
+      [data-r="grid"] { grid-template-columns: repeat(2, 1fr) !important; gap: 16px !important; }
+      [data-r="cat-tabs"], [data-r="products-wrap"], [data-r="banner"] { padding-left: 20px !important; padding-right: 20px !important; }
+      [data-r="footer"] { padding: 24px 20px !important; }
+      [data-r="admin-wrap"] { padding: 20px 16px !important; }
+    }
+    /* Mobile */
+    @media (max-width: 640px) {
+      [data-r="header-inner"] { flex-direction: column !important; gap: 12px !important; padding: 14px 16px 12px !important; align-items: stretch !important; }
+      [data-r="header-left"] { justify-content: center !important; }
+      [data-r="header-logo"] { height: 44px !important; width: 44px !important; }
+      [data-r="header-brand"] { font-size: 20px !important; letter-spacing: 3px !important; }
+      [data-r="header-slogan"] { font-size: 8px !important; letter-spacing: 3px !important; }
+      [data-r="header-right"] { justify-content: center !important; gap: 8px !important; }
+      [data-r="search-input"] { width: 100% !important; flex: 1 !important; font-size: 12px !important; }
+      [data-r="contact-btn"] { padding: 8px 12px 8px 8px !important; font-size: 12px !important; }
+      [data-r="contact-btn"] > span:last-child { display: none !important; }
+      [data-r="grid"] { grid-template-columns: repeat(2, 1fr) !important; gap: 12px !important; }
+      [data-r="card-info"] { padding: 10px !important; }
+      [data-r="card-info"] > div:nth-child(3) { font-size: 11px !important; }
+      [data-r="card-price"] { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
+      [data-r="card-price"] > a { align-self: stretch !important; justify-content: center !important; font-size: 12px !important; padding: 7px 14px 7px 8px !important; }
+      [data-r="cat-tabs"] { padding: 12px 16px !important; gap: 6px !important; }
+      [data-r="cat-tabs"] button { font-size: 12px !important; padding: 5px 12px !important; }
+      [data-r="products-wrap"] { padding: 16px !important; }
+      [data-r="banner"] { padding: 8px 16px !important; font-size: 12px !important; }
+      [data-r="footer"] { padding: 20px 16px !important; }
+      [data-r="footer-top"] { flex-direction: column !important; align-items: center !important; gap: 12px !important; }
+      [data-r="footer-bottom"] { flex-direction: column !important; align-items: center !important; gap: 6px !important; }
+      [data-r="login-box"] { width: calc(100% - 32px) !important; padding: 28px 20px !important; }
+      [data-r="admin-header"] { padding: 12px 16px !important; flex-wrap: wrap !important; gap: 8px !important; }
+      [data-r="admin-header"] span { font-size: 15px !important; }
+      [data-r="admin-wrap"] { padding: 16px 12px !important; }
+      [data-r="admin-card"] { padding: 16px !important; }
+      [data-r="form-grid"] { grid-template-columns: 1fr !important; }
+      [data-r="admin-prod-row"] { flex-direction: column !important; align-items: flex-start !important; gap: 8px !important; }
+      [data-r="admin-prod-actions"] { align-self: flex-end !important; }
+    }
+    @media (max-width: 640px) {
+      [data-r="super-offer-text"] { padding: 16px 16px !important; }
+      [data-r="super-offer-text"] > div:first-child { font-size: 18px !important; }
+      [data-r="super-offer-text"] > div:nth-child(2) { font-size: 12px !important; }
+      [data-r="super-offer-prices"] { flex-direction: column !important; gap: 10px !important; }
+      [data-r="super-offer-prices"] span:last-child { font-size: 24px !important; }
+      [data-r="super-offer-prices"] a { align-self: stretch !important; justify-content: center !important; }
+    }
+    @media (max-width: 400px) {
+      [data-r="grid"] { grid-template-columns: 1fr !important; }
+    }
+  </style>
+</helmet>
+
+<!-- LOADING SCREEN -->
+<sc-if value="{{ loading }}" hint-placeholder-val="{{ true }}">
+  <div style="position: fixed; inset: 0; z-index: 9999; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px">
+    <div style="animation: loadPulse 1.5s ease-in-out infinite, loadGlow 1.5s ease-in-out infinite; border-radius: 50%; padding: 4px">
+      <img src="uploads/WhatsApp Image 2026-08-24 at 08.48.46.jpeg" style="width: 110px; height: 110px; border-radius: 50%; object-fit: cover; display: block">
+    </div>
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px">
+      <span style="color: white; font-size: 28px; font-weight: 700; text-transform: uppercase; animation: loadTextIn 1s ease forwards"><span style="color: #fff">PERFU</span><span style="background: linear-gradient(90deg, #3a8fd4, #6b4ecf, #e8632b); -webkit-background-clip: text; -webkit-text-fill-color: transparent">SKY</span></span>
+      <span style="color: rgba(255,255,255,0.35); font-size: 10px; letter-spacing: 5px; text-transform: uppercase; font-weight: 300; animation: loadTextIn 1.2s ease forwards">Esencia que define</span>
+    </div>
+    <div style="width: 140px; height: 3px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; margin-top: 4px">
+      <div style="height: 100%; border-radius: 3px; background: linear-gradient(90deg, #3a8fd4, #6b4ecf, #e8632b); animation: loadBar 2s ease forwards"></div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- CATALOG VIEW -->
+<sc-if value="{{ showCatalog }}" hint-placeholder-val="{{ true }}">
+  <div style="min-height: 100vh; display: flex; flex-direction: column">
+    <!-- Header -->
+    <div style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)">
+      <div data-r="header-inner" style="padding: 24px 40px 20px; display: flex; align-items: center; justify-content: space-between">
+        <div data-r="header-left" style="display: flex; align-items: center; gap: 16px">
+          <img data-r="header-logo" src="uploads/WhatsApp Image 2026-08-24 at 08.48.46.jpeg" style="height: 72px; width: 72px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.1)" alt="Perfusky">
+          <div style="display: flex; flex-direction: column">
+            <span data-r="header-brand" style="color: white; font-size: 30px; font-weight: 700; letter-spacing: 5px; text-transform: uppercase; line-height: 1.1"><span style="color: #ffffff">PERFU</span><span style="background: linear-gradient(90deg, #3a8fd4, #6b4ecf, #e8632b); -webkit-background-clip: text; -webkit-text-fill-color: transparent">SKY</span></span>
+            <span data-r="header-slogan" style="color: rgba(255,255,255,0.45); font-size: 11px; letter-spacing: 5px; text-transform: uppercase; font-weight: 300">Esencia que define</span>
+          </div>
+        </div>
+        <div data-r="header-right" style="display: flex; align-items: center; gap: 14px">
+          <div style="position: relative">
+            <input type="text" placeholder="Buscar productos..." style="padding: 10px 18px 10px 40px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.08); color: white; font-family: inherit; font-size: 13px; width: 240px; outline: none" data-r="search-input" oninput="{{ onSearch }}" value="{{ searchTerm }}">
+            <i data-lucide="search" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.4); width: 16px; height: 16px"></i>
+          </div>
+          <a href="{{ whatsappGeneral }}" target="_blank" style="display: inline-flex; align-items: center; gap: 8px; background: #25d366; padding: 8px 18px 8px 10px; border-radius: 30px; color: white; font-size: 13px; font-weight: 600; text-decoration: none; box-shadow: 3px 3px 8px rgba(0,0,0,0.15); transition: background 0.3s, transform 0.2s" data-r="contact-btn" style-hover="background: #2ee06e; transform: scale(1.03)" style-active="transform: scale(0.97)">
+            <span style="width: 28px; height: 28px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="message-circle" style="width: 14px; height: 14px"></i></span> <span>Contacto</span>
+          </a>
+        </div>
+      </div>
+      <div style="height: 3px; background: linear-gradient(90deg, #3a8fd4, #6b4ecf, #e8632b)"></div>
+    </div>
+    <!-- CTA Banner -->
+    <sc-if value="{{ bannerActive }}" hint-placeholder-val="{{ true }}">
+      <div data-r="banner" style="background: {{ bannerBg }}; color: white; padding: 10px 40px; display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 14px; font-weight: 600; letter-spacing: 1px; text-align: center">
+        <i data-lucide="sparkles" style="width: 16px; height: 16px; flex-shrink: 0"></i>
+        <span>{{ bannerText }}</span>
+        <i data-lucide="sparkles" style="width: 16px; height: 16px; flex-shrink: 0"></i>
+      </div>
+    </sc-if>
+    <!-- Super Oferta -->
+    <sc-if value="{{ superOfferActive }}" hint-placeholder-val="{{ false }}">
+      <div data-r="products-wrap" style="padding: 24px 40px 0">
+        <div style="background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 60%, #2d1b4e 100%); border-radius: 20px; overflow: hidden; position: relative; transition: transform 0.3s, box-shadow 0.3s" style-hover="transform: translateY(-4px); box-shadow: 0 20px 50px rgba(26,26,46,0.4)">
+          <!-- Decorative elements -->
+          <div style="position: absolute; top: -40px; right: -40px; width: 250px; height: 250px; background: radial-gradient(circle, rgba(232,99,43,0.12) 0%, transparent 70%); pointer-events: none"></div>
+          <div style="position: absolute; bottom: -30px; left: -30px; width: 200px; height: 200px; background: radial-gradient(circle, rgba(58,143,212,0.08) 0%, transparent 70%); pointer-events: none"></div>
+          <div style="position: absolute; top: 16px; left: 16px; z-index: 2">
+            <span style="background: linear-gradient(135deg, #e74c3c, #e8632b); color: white; font-size: 12px; font-weight: 700; padding: 6px 16px; border-radius: 8px; text-transform: uppercase; letter-spacing: 1.5px; animation: loadPulse 2s ease-in-out infinite; box-shadow: 0 4px 12px rgba(231,76,60,0.4)">⚡ Super Oferta</span>
+          </div>
+          <!-- Image 16:9 -->
+          <sc-if value="{{ superOfferHasImage }}" hint-placeholder-val="{{ false }}">
+            <div style="width: 100%; aspect-ratio: 16/9; overflow: hidden; position: relative">
+              <img src="{{ superOfferImage }}" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s" style-hover="transform: scale(1.03)">
+              <sc-if value="{{ superOfferHasText }}" hint-placeholder-val="{{ false }}">
+                <div style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(10,10,10,0.95) 0%, rgba(10,10,10,0.4) 40%, transparent 70%); pointer-events: none"></div>
+              </sc-if>
+              <sc-if value="{{ superOfferHasText }}" hint-placeholder-val="{{ false }}">
+                <div data-r="super-offer-text" style="position: absolute; bottom: 0; left: 0; right: 0; padding: 24px 28px; z-index: 1">
+                  <sc-if value="{{ superOfferHasProductName }}" hint-placeholder-val="{{ false }}">
+                    <div style="color: white; font-size: 24px; font-weight: 700; line-height: 1.2; margin-bottom: 6px; text-wrap: pretty">{{ superOfferProductName }}</div>
+                  </sc-if>
+                  <sc-if value="{{ superOfferHasDesc }}" hint-placeholder-val="{{ false }}">
+                    <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.5; max-width: 500px">{{ superOfferDesc }}</div>
+                  </sc-if>
+                  <div data-r="super-offer-prices" style="display: flex; align-items: center; gap: 16px; margin-top: 14px; flex-wrap: wrap">
+                    <sc-if value="{{ superOfferHasPrice }}" hint-placeholder-val="{{ false }}">
+                      <div style="display: flex; align-items: baseline; gap: 10px">
+                        <sc-if value="{{ superOfferHasOldPrice }}" hint-placeholder-val="{{ false }}">
+                          <span style="color: rgba(255,255,255,0.3); font-size: 18px; text-decoration: line-through; font-weight: 500">{{ superOfferOldPrice }}</span>
+                        </sc-if>
+                        <span style="color: #25d366; font-size: 32px; font-weight: 700; text-shadow: 0 2px 12px rgba(37,211,102,0.3)">{{ superOfferPrice }}</span>
+                      </div>
+                    </sc-if>
+                    <a href="{{ superOfferWhatsapp }}" target="_blank" style="background: #25d366; color: #fff; padding: 10px 24px 10px 14px; border-radius: 30px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; box-shadow: 0 4px 16px rgba(37,211,102,0.35); transition: background 0.3s, transform 0.2s" style-hover="background: #2ee06e; transform: scale(1.05)" style-active="transform: scale(0.97)">
+                      <span style="width: 30px; height: 30px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="heart" style="width: 15px; height: 15px"></i></span> ¡Lo quiero!
+                    </a>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+          <sc-if value="{{ superOfferNoImage }}" hint-placeholder-val="{{ true }}">
+            <div data-r="super-offer-text" style="padding: 40px 28px; z-index: 1; position: relative">
+              <div style="color: white; font-size: 24px; font-weight: 700; line-height: 1.2; margin-top: 28px; margin-bottom: 6px">{{ superOfferProductName }}</div>
+              <div style="color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.5">{{ superOfferDesc }}</div>
+              <div data-r="super-offer-prices" style="display: flex; align-items: center; gap: 16px; margin-top: 16px; flex-wrap: wrap">
+                <div style="display: flex; align-items: baseline; gap: 10px">
+                  <sc-if value="{{ superOfferHasOldPrice }}" hint-placeholder-val="{{ false }}">
+                    <span style="color: rgba(255,255,255,0.3); font-size: 18px; text-decoration: line-through">{{ superOfferOldPrice }}</span>
+                  </sc-if>
+                  <span style="color: #25d366; font-size: 32px; font-weight: 700">{{ superOfferPrice }}</span>
+                </div>
+                <a href="{{ superOfferWhatsapp }}" target="_blank" style="background: #25d366; color: #fff; padding: 10px 24px 10px 14px; border-radius: 30px; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; box-shadow: 0 4px 16px rgba(37,211,102,0.35); transition: background 0.3s, transform 0.2s" style-hover="background: #2ee06e; transform: scale(1.05)" style-active="transform: scale(0.97)">
+                  <span style="width: 30px; height: 30px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="heart" style="width: 15px; height: 15px"></i></span> ¡Lo quiero!
+                </a>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+    <!-- Category Tabs -->
+    <div data-r="cat-tabs" style="padding: 16px 40px; background: white; border-bottom: 1px solid #eee; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px">
+      <button onclick="{{ selectAll }}" style="padding: 8px 20px; border-radius: 24px; border: 2px solid {{ allBorder }}; font-family: inherit; font-size: 13px; cursor: pointer; background: {{ allActive }}; color: {{ allActiveText }}; font-weight: 600; letter-spacing: 0.5px; transition: all 0.25s ease; box-shadow: {{ allShadow }}" style-hover="transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.12)">Todos</button>
+      <sc-for list="{{ categories }}" as="cat" hint-placeholder-count="3">
+        <button onclick="{{ cat.select }}" style="padding: 8px 20px; border-radius: 24px; border: 2px solid {{ cat.border }}; font-family: inherit; font-size: 13px; cursor: pointer; background: {{ cat.bg }}; color: {{ cat.textColor }}; font-weight: 500; letter-spacing: 0.3px; transition: all 0.25s ease; box-shadow: {{ cat.shadow }}" style-hover="transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.12)">{{ cat.name }}</button>
+      </sc-for>
+    </div>
+    <!-- Products Grid -->
+    <div data-r="products-wrap" style="padding: 32px 40px">
+      <sc-if value="{{ hasProducts }}" hint-placeholder-val="{{ true }}">
+        <div data-r="grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px">
+          <sc-for list="{{ filteredProducts }}" as="prod" hint-placeholder-count="6">
+            <div style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); animation: fadeIn 0.3s ease; transition: transform 0.3s ease, box-shadow 0.3s ease; cursor: pointer" style-hover="transform: translateY(-6px) scale(1.01); box-shadow: 0 12px 28px rgba(0,0,0,0.12), 0 4px 10px rgba(0,0,0,0.06)">
+              <div data-r="card-img" style="width: 100%; aspect-ratio: 3/4; background: #f0ece6; display: flex; align-items: center; justify-content: center; overflow: hidden">
+                <sc-if value="{{ prod.hasImage }}" hint-placeholder-val="{{ true }}">
+                  <img src="{{ prod.image }}" style="width: 100%; height: 100%; object-fit: cover; transform: scale({{ prod.zoomScale }})" alt="{{ prod.name }}">
+                </sc-if>
+                <sc-if value="{{ prod.noImage }}" hint-placeholder-val="{{ false }}">
+                  <span style="color: #ccc; font-size: 48px">📷</span>
+                </sc-if>
+              </div>
+              <div data-r="card-info" style="padding: 16px">
+                <div style="font-size: 11px; color: #d4a574; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px">{{ prod.categoryName }}</div>
+                <div style="font-size: 15px; font-weight: 600; margin-bottom: 6px">{{ prod.name }}</div>
+                <div style="font-size: 12px; color: #888; line-height: 1.5; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">{{ prod.description }}</div>
+                <sc-if value="{{ prod.onSale }}" hint-placeholder-val="{{ false }}">
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
+                    <span style="background: #e74c3c; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px">Oferta</span>
+                    <span style="font-size: 13px; color: #bbb; text-decoration: line-through">{{ prod.oldPriceDisplay }}</span>
+                  </div>
+                </sc-if>
+                <div data-r="card-price" style="display: flex; align-items: center; justify-content: space-between">
+                  <span style="font-size: 18px; font-weight: 700; color: {{ prod.priceColor }}">{{ prod.finalPrice }}</span>
+                  <button onclick="{{ prod.addToCart }}" style="background: {{ prod.cartBtnBg }}; color: #fff; padding: 8px 18px 8px 10px; border-radius: 30px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; border: none; font-family: inherit; cursor: pointer; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s" style-hover="transform: scale(1.03)" style-active="transform: scale(0.97)">
+                    <span style="width: 28px; height: 28px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="shopping-cart" style="width: 14px; height: 14px"></i></span> {{ prod.cartBtnText }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+      <sc-if value="{{ noProducts }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align: center; padding: 80px 20px; color: #aaa">
+          <div style="font-size: 48px; margin-bottom: 16px">📦</div>
+          <div style="font-size: 16px; font-weight: 500">No hay productos</div>
+          <div style="font-size: 13px; margin-top: 4px">Agrega productos desde el panel de admin</div>
+        </div>
+      </sc-if>
+    </div>
+    <!-- Floating Buttons -->
+    <div style="position: fixed; bottom: 24px; right: 24px; z-index: 100; display: flex; flex-direction: column; gap: 12px; align-items: flex-end">
+      <sc-if value="{{ hasCartItems }}" hint-placeholder-val="{{ false }}">
+        <button onclick="{{ toggleCart }}" style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, #2d3436, #3d4d4f); color: white; border: none; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,0.25); display: flex; align-items: center; justify-content: center; transition: transform 0.3s; position: relative" style-hover="transform: scale(1.1)" style-active="transform: scale(0.95)">
+          <i data-lucide="shopping-cart" style="width: 24px; height: 24px"></i>
+          <span style="position: absolute; top: -4px; right: -4px; background: #e74c3c; color: white; font-size: 11px; font-weight: 700; min-width: 20px; height: 20px; border-radius: 10px; display: flex; align-items: center; justify-content: center; padding: 0 5px">{{ cartCount }}</span>
+        </button>
+      </sc-if>
+      <a href="{{ whatsappGeneral }}" target="_blank" style="width: 60px; height: 60px; border-radius: 50%; background: #25d366; color: white; display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 20px rgba(37,211,102,0.35); transition: transform 0.3s; text-decoration: none" style-hover="transform: scale(1.1)" style-active="transform: scale(0.95)">
+        <i data-lucide="message-circle" style="width: 26px; height: 26px"></i>
+      </a>
+    </div>
+    <!-- Cart Drawer -->
+    <sc-if value="{{ cartOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="position: fixed; inset: 0; z-index: 200; display: flex; justify-content: flex-end">
+        <div onclick="{{ closeCart }}" style="position: absolute; inset: 0; background: rgba(0,0,0,0.5); cursor: pointer"></div>
+        <div style="position: relative; width: 380px; max-width: 90vw; background: white; height: 100%; box-shadow: -8px 0 30px rgba(0,0,0,0.15); display: flex; flex-direction: column; z-index: 1; animation: fadeIn 0.2s ease">
+          <div style="padding: 20px 24px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between">
+            <div style="display: flex; align-items: center; gap: 8px">
+              <i data-lucide="shopping-cart" style="width: 20px; height: 20px; color: #2d3436"></i>
+              <span style="font-size: 18px; font-weight: 700; color: #2d3436">Mi Carrito</span>
+              <span style="background: #f0f0f0; color: #666; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px">{{ cartCount }}</span>
+            </div>
+            <button onclick="{{ closeCart }}" style="background: none; border: none; cursor: pointer; color: #aaa; font-size: 24px; line-height: 1; padding: 4px" style-hover="color: #333">×</button>
+          </div>
+          <div style="flex: 1; overflow-y: auto; padding: 16px 24px">
+            <sc-if value="{{ noCartItems }}" hint-placeholder-val="{{ false }}">
+              <div style="text-align: center; padding: 40px 0; color: #ccc">
+                <i data-lucide="shopping-bag" style="width: 40px; height: 40px; margin-bottom: 12px"></i>
+                <div style="font-size: 14px">Tu carrito está vacío</div>
+              </div>
+            </sc-if>
+            <div style="display: flex; flex-direction: column; gap: 12px">
+              <sc-for list="{{ cartItems }}" as="item" hint-placeholder-count="2">
+                <div style="display: flex; gap: 12px; padding: 12px; background: #faf9f7; border-radius: 10px">
+                  <div style="width: 60px; height: 60px; border-radius: 8px; background: #f0ece6; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center">
+                    <sc-if value="{{ item.hasImage }}" hint-placeholder-val="{{ true }}">
+                      <img src="{{ item.image }}" style="width: 100%; height: 100%; object-fit: cover">
+                    </sc-if>
+                    <sc-if value="{{ item.noImage }}" hint-placeholder-val="{{ false }}">
+                      <span style="color: #ccc; font-size: 20px">📷</span>
+                    </sc-if>
+                  </div>
+                  <div style="flex: 1; min-width: 0">
+                    <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px">{{ item.name }}</div>
+                    <div style="font-size: 12px; color: #888; margin-bottom: 8px">{{ item.price }} c/u</div>
+                    <div style="display: flex; align-items: center; justify-content: space-between">
+                      <div style="display: flex; align-items: center; gap: 0; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden">
+                        <button onclick="{{ item.decrement }}" style="width: 28px; height: 28px; background: #f5f5f5; border: none; cursor: pointer; font-size: 14px; font-weight: 600; color: #666; display: flex; align-items: center; justify-content: center" style-hover="background: #eee">−</button>
+                        <span style="width: 30px; text-align: center; font-size: 13px; font-weight: 600">{{ item.qty }}</span>
+                        <button onclick="{{ item.increment }}" style="width: 28px; height: 28px; background: #f5f5f5; border: none; cursor: pointer; font-size: 14px; font-weight: 600; color: #666; display: flex; align-items: center; justify-content: center" style-hover="background: #eee">+</button>
+                      </div>
+                      <div style="display: flex; align-items: center; gap: 8px">
+                        <span style="font-size: 14px; font-weight: 700; color: #2d3436">{{ item.subtotal }}</span>
+                        <button onclick="{{ item.remove }}" style="background: none; border: none; cursor: pointer; color: #ccc; padding: 2px" style-hover="color: #e74c3c">
+                          <i data-lucide="trash-2" style="width: 14px; height: 14px"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <sc-if value="{{ hasCartItems }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 16px 24px; border-top: 1px solid #eee">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
+                <span style="font-size: 15px; font-weight: 600; color: #666">Total</span>
+                <span style="font-size: 22px; font-weight: 700; color: #2d3436">{{ cartTotal }}</span>
+              </div>
+              <button onclick="{{ sendCartWhatsapp }}" style="width: 100%; background: #25d366; color: white; border: none; padding: 12px 20px 12px 14px; border-radius: 30px; font-family: inherit; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 12px rgba(37,211,102,0.3); transition: background 0.3s, transform 0.2s" style-hover="background: #2ee06e; transform: scale(1.02)" style-active="transform: scale(0.97)">
+                <span style="width: 32px; height: 32px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="message-circle" style="width: 16px; height: 16px"></i></span> Enviar pedido por WhatsApp
+              </button>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+    <!-- Footer -->
+    <div data-r="footer" style="margin-top: auto; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%); padding: 32px 40px">
+      <div data-r="footer-top" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <img src="uploads/WhatsApp Image 2026-08-24 at 08.48.46.jpeg" style="height: 40px; width: 40px; border-radius: 50%; object-fit: cover" alt="Perfusky">
+          <span style="color: white; font-size: 16px; font-weight: 600; letter-spacing: 3px"><span style="color: #fff">PERFU</span><span style="background: linear-gradient(90deg, #3a8fd4, #6b4ecf, #e8632b); -webkit-background-clip: text; -webkit-text-fill-color: transparent">SKY</span></span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 20px">
+          <a href="{{ whatsappGeneral }}" target="_blank" style="display: flex; align-items: center; gap: 6px; color: #25d366; text-decoration: none; font-size: 13px" style-hover="opacity: 0.8">
+            <i data-lucide="message-circle" style="width: 16px; height: 16px"></i> WhatsApp
+          </a>
+        </div>
+      </div>
+      <div style="height: 1px; background: rgba(255,255,255,0.08); margin: 20px 0"></div>
+      <div data-r="footer-bottom" style="display: flex; align-items: center; justify-content: space-between">
+        <span style="color: rgba(255,255,255,0.3); font-size: 11px">© 2026 Perfusky — Esencia que define</span>
+        <span style="color: rgba(255,255,255,0.2); font-size: 11px; cursor: pointer" onclick="{{ goAdmin }}" style-hover="color: rgba(255,255,255,0.4)">Admin</span>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- LOGIN VIEW -->
+<sc-if value="{{ showLogin }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height: 100vh; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%); display: flex; align-items: center; justify-content: center">
+    <div data-r="login-box" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 40px; width: 360px; backdrop-filter: blur(10px)">
+      <div style="text-align: center; margin-bottom: 32px">
+        <img src="uploads/WhatsApp Image 2026-08-24 at 08.48.46.jpeg" style="width: 72px; height: 72px; border-radius: 50%; object-fit: cover; margin-bottom: 16px">
+        <div style="color: white; font-size: 20px; font-weight: 600; letter-spacing: 2px">PANEL ADMIN</div>
+        <div style="color: rgba(255,255,255,0.4); font-size: 12px; margin-top: 4px">Ingresa la contraseña para continuar</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <input type="password" placeholder="Contraseña" style="width: 100%; padding: 12px 16px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.08); color: white; font-family: inherit; font-size: 14px; outline: none" value="{{ loginInput }}" oninput="{{ onLoginInput }}" onkeydown="{{ onLoginKey }}">
+        <sc-if value="{{ loginError }}" hint-placeholder-val="{{ false }}">
+          <div style="color: #e74c3c; font-size: 12px; text-align: center">Contraseña incorrecta</div>
+        </sc-if>
+        <button onclick="{{ tryLogin }}" style="width: 100%; padding: 12px 20px 12px 14px; border-radius: 30px; border: none; background: linear-gradient(90deg, #3a8fd4, #6b4ecf); color: white; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; letter-spacing: 1px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 3px 3px 10px rgba(0,0,0,0.2); transition: transform 0.2s, opacity 0.3s" style-hover="opacity: 0.9; transform: scale(1.02)" style-active="transform: scale(0.97)"><span style="width: 28px; height: 28px; background: rgba(255,255,255,0.2); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="lock" style="width: 14px; height: 14px"></i></span> Ingresar</button>
+        <button onclick="{{ goCatalog }}" style="background: none; border: none; color: rgba(255,255,255,0.4); font-family: inherit; font-size: 12px; cursor: pointer; margin-top: 4px" style-hover="color: rgba(255,255,255,0.7)">← Volver al catálogo</button>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+<!-- ADMIN VIEW -->
+<sc-if value="{{ showAdmin }}" hint-placeholder-val="{{ false }}">
+  <div style="min-height: 100vh; background: #f5f5f5">
+    <!-- Admin Header -->
+    <div data-r="admin-header" style="background: #2d3436; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between">
+      <div style="display: flex; align-items: center; gap: 12px">
+        <span style="color: white; font-size: 18px; font-weight: 600">⚙️ Admin — Perfusky</span>
+      </div>
+      <button onclick="{{ goCatalog }}" style="background: #d4a574; border: none; color: white; padding: 8px 20px 8px 10px; border-radius: 30px; font-family: inherit; font-size: 13px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s" style-hover="background: #c49464; transform: scale(1.03)" style-active="transform: scale(0.97)"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="arrow-left" style="width: 13px; height: 13px"></i></span> Ver Catálogo</button>
+    </div>
+    <div data-r="admin-wrap" style="max-width: 900px; margin: 0 auto; padding: 32px 24px">
+      <!-- BANNER CTA -->
+      <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
+          <div style="font-size: 16px; font-weight: 600">Banner Promocional</div>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #666">
+            <input type="checkbox" checked="{{ adminBannerActive }}" onchange="{{ onBannerToggle }}" style="accent-color: #25d366; width: 16px; height: 16px; cursor: pointer">
+            Activo
+          </label>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div>
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Texto del banner</label>
+            <div style="display: flex; gap: 8px">
+              <input type="text" style="flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="{{ adminBannerText }}" oninput="{{ onBannerText }}">
+              <button onclick="{{ saveBannerText }}" style="background: #2d3436; color: white; border: none; padding: 8px 16px; border-radius: 8px; font-family: inherit; font-size: 12px; cursor: pointer; font-weight: 500; white-space: nowrap" style-hover="background: #3d4d4f">Guardar</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 6px; display: block">Color de fondo</label>
+            <div style="display: flex; gap: 8px">
+              <sc-for list="{{ bannerBgOptions }}" as="opt" hint-placeholder-count="5">
+                <button onclick="{{ opt.select }}" style="width: 36px; height: 36px; border-radius: 8px; border: 2px solid {{ opt.borderColor }}; background: {{ opt.bg }}; cursor: pointer; transition: transform 0.2s" style-hover="transform: scale(1.1)"></button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="border-radius: 8px; overflow: hidden">
+            <div style="background: {{ adminBannerBg }}; color: white; padding: 10px 20px; font-size: 13px; font-weight: 600; text-align: center; letter-spacing: 0.5px">Vista previa: {{ adminBannerText }}</div>
+          </div>
+        </div>
+      </div>
+      <!-- SUPER OFERTA -->
+      <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
+          <div style="font-size: 16px; font-weight: 600">⭐ Super Oferta Destacada</div>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: #666">
+            <input type="checkbox" checked="{{ adminSuperOfferActive }}" onchange="{{ onSuperOfferToggle }}" style="accent-color: #e74c3c; width: 16px; height: 16px; cursor: pointer">
+            Activa
+          </label>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px">
+          <div>
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Nombre del producto</label>
+            <input type="text" placeholder="ej. Perfume Exclusivo 100ml" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="{{ adminSuperOfferProductName }}" oninput="{{ onSuperOfferProductName }}">
+          </div>
+          <div>
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Descripción</label>
+            <input type="text" placeholder="Descripción de la oferta..." style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="{{ adminSuperOfferDesc }}" oninput="{{ onSuperOfferDesc }}">
+          </div>
+          <div style="display: flex; gap: 12px">
+            <div style="flex: 1">
+              <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Precio anterior</label>
+              <input type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="{{ adminSuperOfferOldPrice }}" oninput="{{ onSuperOfferOldPrice }}">
+            </div>
+            <div style="flex: 1">
+              <label style="font-size: 12px; font-weight: 500; color: #e74c3c; margin-bottom: 4px; display: block; font-weight: 600">Precio oferta</label>
+              <input type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #fce4e4; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; background: #fdf8f8" value="{{ adminSuperOfferPrice }}" oninput="{{ onSuperOfferPrice }}">
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Imagen</label>
+            <div style="display: flex; align-items: center; gap: 12px">
+              <label style="padding: 10px 20px; background: #f0ece6; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; color: #2d3436; display: inline-flex; align-items: center; gap: 6px" style-hover="background: #e6e0d8">
+                <i data-lucide="upload" style="width: 14px; height: 14px"></i> Elegir imagen
+                <input type="file" accept="image/*" style="display: none" onchange="{{ onSuperOfferImage }}">
+              </label>
+              <span style="font-size: 11px; color: #aaa">Formato 16:9 (ej. 1280×720px)</span>
+              <sc-if value="{{ adminSuperOfferHasImage }}" hint-placeholder-val="{{ false }}">
+                <img src="{{ adminSuperOfferImage }}" style="width: 120px; aspect-ratio: 16/9; border-radius: 8px; object-fit: cover">
+              </sc-if>
+            </div>
+          </div>
+          <button onclick="{{ saveSuperOffer }}" style="background: #2d3436; color: white; border: none; padding: 9px 22px 9px 12px; border-radius: 30px; font-family: inherit; font-size: 13px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); align-self: flex-start; transition: background 0.3s, transform 0.2s" style-hover="background: #3d4d4f; transform: scale(1.03)" style-active="transform: scale(0.97)"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="save" style="width: 13px; height: 13px"></i></span> Guardar Super Oferta</button>
+        </div>
+      </div>
+      <!-- CATEGORÍAS -->
+      <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 16px">Categorías</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 16px">
+          <input type="text" placeholder="Nueva categoría..." style="flex: 1; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="{{ newCatName }}" oninput="{{ onCatInput }}" onkeydown="{{ onCatKey }}">
+          <button onclick="{{ addCategory }}" style="background: #2d3436; color: white; border: none; padding: 9px 20px 9px 12px; border-radius: 30px; font-family: inherit; font-size: 13px; cursor: pointer; font-weight: 600; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s" style-hover="background: #3d4d4f; transform: scale(1.03)" style-active="transform: scale(0.97)"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="plus" style="width: 13px; height: 13px"></i></span> Agregar</button>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <sc-for list="{{ categories }}" as="cat" hint-placeholder-count="2">
+            <div style="display: flex; align-items: center; gap: 6px; background: #f8f8f8; padding: 6px 12px; border-radius: 6px; font-size: 13px">
+              <span>{{ cat.name }}</span>
+              <button onclick="{{ cat.remove }}" style="background: none; border: none; color: #ccc; cursor: pointer; font-size: 16px; line-height: 1; padding: 0 2px" style-hover="color: #e74c3c">×</button>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <!-- ADD PRODUCT FORM -->
+      <div style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 16px">{{ formTitle }}</div>
+        <div data-r="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px">
+          <div style="grid-column: 1 / -1">
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Nombre del producto</label>
+            <input type="text" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="{{ prodName }}" oninput="{{ onProdName }}">
+          </div>
+          <div>
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Categoría</label>
+            <select style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; background: white" value="{{ prodCategory }}" onchange="{{ onProdCategory }}">
+              <option value="">Seleccionar...</option>
+              <sc-for list="{{ categoryOptions }}" as="opt" hint-placeholder-count="2">
+                <option value="{{ opt.value }}" selected="{{ opt.selected }}">{{ opt.name }}</option>
+              </sc-for>
+            </select>
+          </div>
+          <div>
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Precio</label>
+            <input type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="{{ prodPrice }}" oninput="{{ onProdPrice }}">
+          </div>
+          <div style="grid-column: 1 / -1">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px">
+              <label style="font-size: 12px; font-weight: 500; color: #888; display: flex; align-items: center; gap: 6px; cursor: pointer">
+                <input type="checkbox" checked="{{ prodOnSale }}" onchange="{{ onProdOnSale }}" style="accent-color: #e74c3c; width: 16px; height: 16px; cursor: pointer">
+                <span style="display: flex; align-items: center; gap: 4px"><i data-lucide="tag" style="width: 13px; height: 13px; color: #e74c3c"></i> En oferta</span>
+              </label>
+            </div>
+            <sc-if value="{{ prodOnSale }}" hint-placeholder-val="{{ false }}">
+              <div style="display: flex; gap: 12px; background: #fdf2f2; padding: 12px; border-radius: 8px; border: 1px solid #fce4e4">
+                <div style="flex: 1">
+                  <label style="font-size: 11px; font-weight: 500; color: #e74c3c; margin-bottom: 4px; display: block">Precio anterior</label>
+                  <input type="text" placeholder="$0.00" style="width: 100%; padding: 8px 12px; border: 1px solid #fce4e4; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; background: white" value="{{ prodOldPrice }}" oninput="{{ onProdOldPrice }}">
+                </div>
+                <div style="flex: 1">
+                  <label style="font-size: 11px; font-weight: 500; color: #e74c3c; margin-bottom: 4px; display: block">Precio oferta</label>
+                  <input type="text" placeholder="$0.00" style="width: 100%; padding: 8px 12px; border: 1px solid #fce4e4; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; background: white" value="{{ prodSalePrice }}" oninput="{{ onProdSalePrice }}">
+                </div>
+              </div>
+            </sc-if>
+          </div>
+          <div style="grid-column: 1 / -1">
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Descripción</label>
+            <textarea style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; resize: vertical; min-height: 80px" value="{{ prodDesc }}" oninput="{{ onProdDesc }}"></textarea>
+          </div>
+          <div style="grid-column: 1 / -1">
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Imagen</label>
+            <div style="display: flex; align-items: flex-start; gap: 20px; flex-wrap: wrap">
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <label style="padding: 10px 20px; background: #f0ece6; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; color: #2d3436; display: inline-flex; align-items: center; gap: 6px" style-hover="background: #e6e0d8">
+                  <i data-lucide="upload" style="width: 14px; height: 14px"></i> Elegir archivo
+                  <input type="file" accept="image/*" style="display: none" onchange="{{ onProdImage }}">
+                </label>
+                <div style="display: flex; flex-direction: column; gap: 4px">
+                  <span style="font-size: 11px; font-weight: 500; color: #888">Zoom: {{ prodZoomLabel }}</span>
+                  <input type="range" min="100" max="200" value="{{ prodZoom }}" oninput="{{ onProdZoom }}" style="width: 160px; accent-color: #2d3436">
+                </div>
+                <span style="font-size: 11px; color: #aaa">Todas las imágenes se muestran en formato 3:4</span>
+              </div>
+              <sc-if value="{{ prodImagePreview }}" hint-placeholder-val="{{ false }}">
+                <div style="width: 100px; aspect-ratio: 3/4; border-radius: 10px; overflow: hidden; border: 2px solid #eee; flex-shrink: 0">
+                  <img src="{{ prodImagePreview }}" style="width: 100%; height: 100%; object-fit: cover; transform: scale({{ prodZoomScale }})">
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 20px">
+          <button onclick="{{ saveProduct }}" style="background: #2d3436; color: white; border: none; padding: 9px 22px 9px 12px; border-radius: 30px; font-family: inherit; font-size: 13px; cursor: pointer; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s" style-hover="background: #3d4d4f; transform: scale(1.03)" style-active="transform: scale(0.97)"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="save" style="width: 13px; height: 13px"></i></span> {{ saveButtonText }}</button>
+          <sc-if value="{{ isEditing }}" hint-placeholder-val="{{ false }}">
+            <button onclick="{{ cancelEdit }}" style="background: none; border: 1px solid #ddd; color: #888; padding: 10px 24px; border-radius: 8px; font-family: inherit; font-size: 13px; cursor: pointer" style-hover="border-color: #bbb; color: #666">Cancelar</button>
+          </sc-if>
+        </div>
+      </div>
+      <!-- PRODUCT LIST -->
+      <div style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+        <div style="font-size: 16px; font-weight: 600; margin-bottom: 16px">Productos ({{ productCount }})</div>
+        <sc-if value="{{ hasAdminProducts }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <sc-for list="{{ adminProducts }}" as="ap" hint-placeholder-count="3">
+              <div data-r="admin-prod-row" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #f0f0f0; border-radius: 8px" style-hover="border-color: #ddd">
+                <div style="width: 56px; height: 56px; border-radius: 8px; background: #f0ece6; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center">
+                  <sc-if value="{{ ap.hasImage }}" hint-placeholder-val="{{ true }}">
+                    <img src="{{ ap.image }}" style="width: 100%; height: 100%; object-fit: cover">
+                  </sc-if>
+                  <sc-if value="{{ ap.noImage }}" hint-placeholder-val="{{ false }}">
+                    <span style="color: #ccc; font-size: 20px">📷</span>
+                  </sc-if>
+                </div>
+                <div style="flex: 1; min-width: 0">
+                  <div style="font-size: 14px; font-weight: 500">{{ ap.name }}</div>
+                  <div style="font-size: 12px; color: #aaa">{{ ap.categoryName }} · {{ ap.priceDisplay }}</div>
+                </div>
+                <div data-r="admin-prod-actions" style="display: flex; gap: 4px">
+                  <button onclick="{{ ap.edit }}" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; color: #666" style-hover="border-color: #bbb; color: #333">Editar</button>
+                  <button onclick="{{ ap.remove }}" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-family: inherit; color: #e74c3c" style-hover="border-color: #e74c3c; background: #fdf2f2">Eliminar</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ noAdminProducts }}" hint-placeholder-val="{{ false }}">
+          <div style="text-align: center; padding: 40px; color: #ccc; font-size: 13px">No hay productos aún. Usa el formulario de arriba para agregar.</div>
+        </sc-if>
+      </div>
+    </div>
+  </div>
+</sc-if>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;whatsappNumber&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;5493515066285&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Configuración&quot;}, &quot;brandName&quot;: {&quot;editor&quot;: &quot;text&quot;, &quot;default&quot;: &quot;Perfusky&quot;, &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Configuración&quot;}}">
+
+// Anon key + URL are safe to expose client-side: they're gated by Supabase Row Level Security, not by secrecy.
+const SUPABASE_URL = 'https://ppmhkeatgcvaygrajcra.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwbWhrZWF0Z2N2YXlncmFqY3JhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1ODk5MzcsImV4cCI6MjEwMzE2NTkzN30.tOD417ZMNlRQ7AN_A5CekasFC1KIvwVsQxjuE4eTEt8';
+// Must match the exact email of the admin user created in Supabase Dashboard > Authentication > Users.
+const ADMIN_EMAIL = 'admin@perfusky.app';
+const PRODUCT_IMAGES_BUCKET = 'product-images';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function dbCategoryToUi(c) {
+  return { id: String(c.id), name: c.name };
+}
+function dbProductToUi(p) {
+  return {
+    id: String(p.id),
+    categoryId: p.category_id != null ? String(p.category_id) : '',
+    name: p.name,
+    description: p.description || '',
+    price: p.price != null ? String(p.price) : '',
+    onSale: !!p.on_sale,
+    oldPrice: p.old_price != null ? String(p.old_price) : '',
+    salePrice: p.sale_price != null ? String(p.sale_price) : '',
+    image: p.image_url || '',
+    ratio: p.image_ratio || '1',
+    zoom: p.image_zoom || 100
+  };
+}
+
+class Component extends DCLogic {
+  state = {
+    view: 'catalog',
+    selectedCategory: null,
+    searchTerm: '',
+    categories: [],
+    products: [],
+    newCatName: '',
+    editingId: null,
+    prodName: '',
+    prodCategory: '',
+    prodPrice: '',
+    prodDesc: '',
+    prodImage: '',
+    prodRatio: '1',
+    prodZoom: 100,
+    prodOnSale: false,
+    prodOldPrice: '',
+    prodSalePrice: '',
+    bannerActive: true,
+    bannerText: '🔥 5% OFF en todos los productos — ¡Solo por tiempo limitado!',
+    bannerBg: 'linear-gradient(90deg, #e74c3c, #c0392b)',
+    bannerEditText: '',
+    bannerEditBg: '',
+    superOfferActive: false,
+    superOfferTitle: '🔥 SUPER OFERTA',
+    superOfferDesc: '¡Aprovecha esta oferta exclusiva por tiempo limitado!',
+    superOfferImage: '',
+    superOfferPrice: '',
+    superOfferOldPrice: '',
+    superOfferProductName: '',
+    whatsappNumber: '5493515066285',
+    loginInput: '',
+    loginError: false,
+    loginBusy: false,
+    isAuthed: false,
+    superOfferId: null,
+    loading: true,
+    cart: [],
+    cartOpen: false
+  };
+
+  async componentDidMount() {
+    this.initLucide();
+    const minWait = new Promise(res => setTimeout(res, 1200));
+    await Promise.all([this.loadAll(), minWait]);
+    if (window.location.hash === '#admin') {
+      this.setState({ view: this.state.isAuthed ? 'admin' : 'login' });
+    }
+    this.setState({ loading: false });
+
+    sb.auth.onAuthStateChange((_event, session) => {
+      this.setState({ isAuthed: !!session });
+    });
+  }
+
+  async loadAll() {
+    try {
+      const [{ data: cats, error: catErr }, { data: prods, error: prodErr }, { data: settings, error: setErr }, { data: superOffers, error: soErr }, { data: { session } }] = await Promise.all([
+        sb.from('categories').select('*').order('name'),
+        sb.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }),
+        sb.from('settings').select('*'),
+        sb.from('super_offer').select('*').limit(1),
+        sb.auth.getSession()
+      ]);
+      if (catErr) console.error('[perfusky] error cargando categorías:', catErr);
+      if (prodErr) console.error('[perfusky] error cargando productos:', prodErr);
+      if (setErr) console.error('[perfusky] error cargando configuración:', setErr);
+      if (soErr) console.error('[perfusky] error cargando super oferta:', soErr);
+
+      const updates = {
+        categories: (cats || []).map(dbCategoryToUi),
+        products: (prods || []).map(dbProductToUi),
+        isAuthed: !!session
+      };
+
+      const settingsMap = {};
+      for (const row of settings || []) settingsMap[row.key] = row.value;
+      if ('whatsapp_number' in settingsMap) updates.whatsappNumber = settingsMap.whatsapp_number;
+      if ('banner_active' in settingsMap) updates.bannerActive = settingsMap.banner_active === 'true';
+      if ('banner_text' in settingsMap) updates.bannerText = settingsMap.banner_text;
+      if ('banner_bg' in settingsMap) updates.bannerBg = settingsMap.banner_bg;
+
+      const so = (superOffers || [])[0];
+      if (so) {
+        updates.superOfferId = so.id;
+        updates.superOfferActive = !!so.is_active;
+        updates.superOfferProductName = so.product_name || '';
+        updates.superOfferDesc = so.description || '';
+        updates.superOfferOldPrice = so.old_price != null ? String(so.old_price) : '';
+        updates.superOfferPrice = so.sale_price != null ? String(so.sale_price) : '';
+        updates.superOfferImage = so.image_url || '';
+      }
+      this.setState(updates);
+    } catch (e) {
+      console.error('[perfusky] fallo al cargar datos de Supabase:', e);
+    }
+  }
+
+  componentDidUpdate() {
+    this.initLucide();
+  }
+
+  initLucide() {
+    if (window.lucide) {
+      setTimeout(() => window.lucide.createIcons(), 50);
+    }
+  }
+
+  async saveBanner() {
+    const s = this.state;
+    const rows = [
+      { key: 'banner_active', value: String(s.bannerActive) },
+      { key: 'banner_text', value: s.bannerText },
+      { key: 'banner_bg', value: s.bannerBg }
+    ];
+    const { error } = await sb.from('settings').upsert(rows, { onConflict: 'key' });
+    if (error) console.error('[perfusky] error guardando banner:', error);
+  }
+
+  async saveSuperOffer() {
+    const s = this.state;
+    const payload = {
+      is_active: s.superOfferActive,
+      product_name: s.superOfferProductName,
+      description: s.superOfferDesc,
+      old_price: s.superOfferOldPrice || null,
+      sale_price: s.superOfferPrice || null,
+      image_url: s.superOfferImage || null
+    };
+    if (s.superOfferId) {
+      const { error } = await sb.from('super_offer').update(payload).eq('id', s.superOfferId);
+      if (error) console.error('[perfusky] error guardando super oferta:', error);
+    } else {
+      const { data, error } = await sb.from('super_offer').insert(payload).select().single();
+      if (error) console.error('[perfusky] error creando super oferta:', error);
+      else this.setState({ superOfferId: data.id });
+    }
+  }
+
+  renderVals() {
+    const s = this.state;
+    const isAdmin = s.view === 'admin';
+    const ratioMap = { '1': '1', '916': '9/16', '43': '4/3' };
+    const ratioLabel = (r) => r === '916' ? '9:16' : r === '43' ? '4:3' : '1:1';
+    const isR = (r) => (s.prodRatio || '1') === r;
+    const rBtn = (r) => ({ bg: isR(r) ? '#2d3436' : 'white', color: isR(r) ? 'white' : '#666', border: isR(r) ? '#2d3436' : '#ddd' });
+    const filtered = s.products.filter(p => {
+      const matchCat = !s.selectedCategory || p.categoryId === s.selectedCategory;
+      const matchSearch = !s.searchTerm || p.name.toLowerCase().includes(s.searchTerm.toLowerCase()) || (p.description || '').toLowerCase().includes(s.searchTerm.toLowerCase());
+      return matchCat && matchSearch;
+    });
+    const getCatName = (id) => { const c = s.categories.find(c => c.id === id); return c ? c.name : ''; };
+    const wpNum = this.props.whatsappNumber ?? s.whatsappNumber;
+
+    return {
+      loading: s.loading,
+      notLoading: !s.loading,
+      showCatalog: s.view === 'catalog',
+      showAdmin: s.view === 'admin',
+      whatsappGeneral: `https://wa.me/${wpNum}?text=${encodeURIComponent('Hola! Quisiera información sobre sus productos')}`,
+      bannerActive: s.bannerActive,
+      bannerText: s.bannerText,
+      bannerBg: s.bannerBg,
+      // Admin banner
+      adminBannerActive: s.bannerActive,
+      adminBannerText: s.bannerText,
+      adminBannerBg: s.bannerBg,
+      onBannerToggle: (e) => { this.setState({ bannerActive: e.target.checked }, () => this.saveBanner()); },
+      onBannerText: (e) => this.setState({ bannerText: e.target.value }),
+      onBannerBg: (bg) => () => { this.setState({ bannerBg: bg }, () => this.saveBanner()); },
+      saveBannerText: () => this.saveBanner(),
+      bannerBgOptions: [
+        { bg: 'linear-gradient(90deg, #e74c3c, #c0392b)', borderColor: s.bannerBg.includes('e74c3c') ? '#2d3436' : 'transparent', select: () => { this.setState({ bannerBg: 'linear-gradient(90deg, #e74c3c, #c0392b)' }, () => this.saveBanner()); } },
+        { bg: 'linear-gradient(90deg, #3a8fd4, #6b4ecf)', borderColor: s.bannerBg.includes('3a8fd4') ? '#2d3436' : 'transparent', select: () => { this.setState({ bannerBg: 'linear-gradient(90deg, #3a8fd4, #6b4ecf)' }, () => this.saveBanner()); } },
+        { bg: 'linear-gradient(90deg, #e8632b, #d4a574)', borderColor: s.bannerBg.includes('e8632b') ? '#2d3436' : 'transparent', select: () => { this.setState({ bannerBg: 'linear-gradient(90deg, #e8632b, #d4a574)' }, () => this.saveBanner()); } },
+        { bg: 'linear-gradient(90deg, #2d3436, #636e72)', borderColor: s.bannerBg.includes('2d3436') && !s.bannerBg.includes('25d') ? '#e74c3c' : 'transparent', select: () => { this.setState({ bannerBg: 'linear-gradient(90deg, #2d3436, #636e72)' }, () => this.saveBanner()); } },
+        { bg: 'linear-gradient(90deg, #25d366, #1ebe57)', borderColor: s.bannerBg.includes('25d366') ? '#2d3436' : 'transparent', select: () => { this.setState({ bannerBg: 'linear-gradient(90deg, #25d366, #1ebe57)' }, () => this.saveBanner()); } },
+      ],
+      // Super Offer catalog
+      superOfferActive: s.superOfferActive,
+      superOfferTitle: s.superOfferTitle,
+      superOfferDesc: s.superOfferDesc,
+      superOfferImage: s.superOfferImage || null,
+      superOfferHasImage: !!s.superOfferImage,
+      superOfferNoImage: !s.superOfferImage,
+      superOfferPrice: s.superOfferPrice ? `$${s.superOfferPrice}` : '',
+      superOfferOldPrice: s.superOfferOldPrice ? `$${s.superOfferOldPrice}` : '',
+      superOfferHasOldPrice: !!s.superOfferOldPrice,
+      superOfferHasPrice: !!s.superOfferPrice,
+      superOfferHasProductName: !!s.superOfferProductName.trim(),
+      superOfferHasDesc: !!s.superOfferDesc.trim(),
+      superOfferHasText: !!(s.superOfferProductName.trim() || s.superOfferDesc.trim() || s.superOfferPrice),
+      superOfferProductName: s.superOfferProductName,
+      superOfferWhatsapp: `https://wa.me/${wpNum}?text=${encodeURIComponent('Hola! Me interesa la SUPER OFERTA: ' + s.superOfferProductName)}`,
+      // Admin super offer
+      adminSuperOfferActive: s.superOfferActive,
+      adminSuperOfferTitle: s.superOfferTitle,
+      adminSuperOfferDesc: s.superOfferDesc,
+      adminSuperOfferPrice: s.superOfferPrice,
+      adminSuperOfferOldPrice: s.superOfferOldPrice,
+      adminSuperOfferProductName: s.superOfferProductName,
+      adminSuperOfferImage: s.superOfferImage || null,
+      adminSuperOfferHasImage: !!s.superOfferImage,
+      onSuperOfferToggle: (e) => { this.setState({ superOfferActive: e.target.checked }, () => this.saveSuperOffer()); },
+      onSuperOfferTitle: (e) => this.setState({ superOfferTitle: e.target.value }),
+      onSuperOfferDesc: (e) => this.setState({ superOfferDesc: e.target.value }),
+      onSuperOfferPrice: (e) => this.setState({ superOfferPrice: e.target.value }),
+      onSuperOfferOldPrice: (e) => this.setState({ superOfferOldPrice: e.target.value }),
+      onSuperOfferProductName: (e) => this.setState({ superOfferProductName: e.target.value }),
+      onSuperOfferImage: (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.uploadImage(file).then(url => {
+          if (url) this.setState({ superOfferImage: url }, () => this.saveSuperOffer());
+        });
+      },
+      saveSuperOffer: () => this.saveSuperOffer(),
+      searchTerm: s.searchTerm,
+      onSearch: (e) => this.setState({ searchTerm: e.target.value }),
+      showLogin: s.view === 'login',
+      loginInput: s.loginInput,
+      loginError: s.loginError,
+      onLoginInput: (e) => this.setState({ loginInput: e.target.value, loginError: false }),
+      onLoginKey: (e) => { if (e.key === 'Enter') this.tryLogin(); },
+      tryLogin: () => this.tryLogin(),
+      goAdmin: () => { window.location.hash = 'admin'; this.setState({ view: s.isAuthed ? 'admin' : 'login', loginInput: '', loginError: false }); },
+      goCatalog: () => { window.location.hash = ''; this.setState({ view: 'catalog' }); },
+      allActive: !s.selectedCategory ? 'linear-gradient(135deg, #2d3436, #3d4d4f)' : 'white',
+      allActiveText: !s.selectedCategory ? 'white' : '#555',
+      allBorder: !s.selectedCategory ? '#2d3436' : '#e0e0e0',
+      allShadow: !s.selectedCategory ? '0 2px 6px rgba(45,52,54,0.3)' : '0 1px 3px rgba(0,0,0,0.04)',
+      selectAll: () => this.setState({ selectedCategory: null }),
+      categories: s.categories.map(c => ({
+        ...c,
+        bg: s.selectedCategory === c.id ? 'linear-gradient(135deg, #2d3436, #3d4d4f)' : 'white',
+        textColor: s.selectedCategory === c.id ? 'white' : '#555',
+        border: s.selectedCategory === c.id ? '#2d3436' : '#e0e0e0',
+        shadow: s.selectedCategory === c.id ? '0 2px 6px rgba(45,52,54,0.3)' : '0 1px 3px rgba(0,0,0,0.04)',
+        select: () => this.setState({ selectedCategory: s.selectedCategory === c.id ? null : c.id }),
+        remove: () => this.removeCategory(c.id)
+      })),
+      hasProducts: filtered.length > 0,
+      noProducts: filtered.length === 0,
+      filteredProducts: filtered.map(p => ({
+        ...p,
+        categoryName: getCatName(p.categoryId),
+        hasImage: !!p.image,
+        noImage: !p.image,
+        onSale: !!p.onSale,
+        oldPriceDisplay: p.oldPrice ? `$${p.oldPrice}` : '',
+        finalPrice: p.onSale && p.salePrice ? `$${p.salePrice}` : (p.price ? `$${p.price}` : ''),
+        priceColor: p.onSale ? '#e74c3c' : '#2d3436',
+        ratio: ratioMap[p.ratio || '1'] || '1',
+        zoomScale: (p.zoom || 100) / 100,
+        whatsappLink: `https://wa.me/${wpNum}?text=${encodeURIComponent('Hola! Me interesa: ' + p.name)}`,
+        addToCart: () => this.addToCart(p),
+        inCart: s.cart.some(c => c.id === p.id),
+        cartBtnBg: s.cart.some(c => c.id === p.id) ? '#2d3436' : '#25d366',
+        cartBtnText: s.cart.some(c => c.id === p.id) ? '✓ Agregado' : 'Agregar'
+      })),
+      // Admin
+      newCatName: s.newCatName,
+      onCatInput: (e) => this.setState({ newCatName: e.target.value }),
+      onCatKey: (e) => { if (e.key === 'Enter') this.addCat(); },
+      addCategory: () => this.addCat(),
+      categoryOptions: s.categories.map(c => ({ value: c.id, name: c.name, selected: s.prodCategory === c.id })),
+      formTitle: s.editingId ? 'Editar Producto' : 'Agregar Producto',
+      saveButtonText: s.editingId ? 'Guardar Cambios' : '+ Agregar Producto',
+      isEditing: !!s.editingId,
+      prodName: s.prodName,
+      prodCategory: s.prodCategory,
+      prodPrice: s.prodPrice,
+      prodDesc: s.prodDesc,
+      prodImagePreview: s.prodImage || null,
+      onProdName: (e) => this.setState({ prodName: e.target.value }),
+      onProdCategory: (e) => this.setState({ prodCategory: e.target.value }),
+      onProdPrice: (e) => this.setState({ prodPrice: e.target.value }),
+      onProdDesc: (e) => this.setState({ prodDesc: e.target.value }),
+      onProdImage: (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        this.uploadImage(file).then(url => {
+          if (url) this.setState({ prodImage: url });
+        });
+      },
+      setRatio1: () => this.setState({ prodRatio: '1' }),
+      setRatio916: () => this.setState({ prodRatio: '916' }),
+      setRatio43: () => this.setState({ prodRatio: '43' }),
+      ratio1Bg: rBtn('1').bg, ratio1Color: rBtn('1').color, ratio1Border: rBtn('1').border,
+      ratio916Bg: rBtn('916').bg, ratio916Color: rBtn('916').color, ratio916Border: rBtn('916').border,
+      ratio43Bg: rBtn('43').bg, ratio43Color: rBtn('43').color, ratio43Border: rBtn('43').border,
+      prodZoom: s.prodZoom || 100,
+      prodZoomScale: (s.prodZoom || 100) / 100,
+      prodZoomLabel: `${s.prodZoom || 100}%`,
+      onProdZoom: (e) => this.setState({ prodZoom: parseInt(e.target.value) }),
+      previewRatio: ratioMap[s.prodRatio || '1'] || '1',
+      prodOnSale: !!s.prodOnSale,
+      prodOldPrice: s.prodOldPrice,
+      prodSalePrice: s.prodSalePrice,
+      onProdOnSale: (e) => this.setState({ prodOnSale: e.target.checked }),
+      onProdOldPrice: (e) => this.setState({ prodOldPrice: e.target.value }),
+      onProdSalePrice: (e) => this.setState({ prodSalePrice: e.target.value }),
+      // Cart
+      cartOpen: s.cartOpen,
+      cartCount: s.cart.reduce((sum, c) => sum + c.qty, 0),
+      hasCartItems: s.cart.length > 0,
+      noCartItems: s.cart.length === 0,
+      cartTotal: '$' + s.cart.reduce((sum, c) => {
+        const prod = s.products.find(p => p.id === c.id);
+        if (!prod) return sum;
+        const price = parseFloat(prod.onSale && prod.salePrice ? prod.salePrice : prod.price) || 0;
+        return sum + price * c.qty;
+      }, 0).toFixed(2),
+      toggleCart: () => this.setState({ cartOpen: !s.cartOpen }),
+      closeCart: () => this.setState({ cartOpen: false }),
+      cartItems: s.cart.map(c => {
+        const prod = s.products.find(p => p.id === c.id);
+        if (!prod) return null;
+        const price = prod.onSale && prod.salePrice ? prod.salePrice : prod.price;
+        return {
+          id: c.id,
+          name: prod.name,
+          image: prod.image || null,
+          hasImage: !!prod.image,
+          noImage: !prod.image,
+          price: price ? `$${price}` : '',
+          qty: c.qty,
+          subtotal: `$${((parseFloat(price) || 0) * c.qty).toFixed(2)}`,
+          increment: () => this.updateCartQty(c.id, 1),
+          decrement: () => this.updateCartQty(c.id, -1),
+          remove: () => this.setState({ cart: s.cart.filter(x => x.id !== c.id) })
+        };
+      }).filter(Boolean),
+      sendCartWhatsapp: () => this.sendCartWhatsapp(),
+      saveProduct: () => this.saveProd(),
+      cancelEdit: () => this.setState({ editingId: null, prodName: '', prodCategory: '', prodPrice: '', prodDesc: '', prodImage: '', prodRatio: '1', prodZoom: 100, prodOnSale: false, prodOldPrice: '', prodSalePrice: '' }),
+      productCount: s.products.length,
+      hasAdminProducts: s.products.length > 0,
+      noAdminProducts: s.products.length === 0,
+      adminProducts: s.products.map(p => ({
+        ...p,
+        categoryName: getCatName(p.categoryId),
+        hasImage: !!p.image,
+        noImage: !p.image,
+        priceDisplay: p.price ? `$${p.price}` : 'Sin precio',
+        edit: () => this.setState({ editingId: p.id, prodName: p.name, prodCategory: p.categoryId, prodPrice: p.price, prodDesc: p.description, prodImage: p.image || '', prodRatio: p.ratio || '1', prodZoom: p.zoom || 100, prodOnSale: !!p.onSale, prodOldPrice: p.oldPrice || '', prodSalePrice: p.salePrice || '' }),
+        remove: () => this.removeProduct(p.id)
+      }))
+    };
+  }
+
+  addToCart(product) {
+    const cart = [...this.state.cart];
+    const existing = cart.find(c => c.id === product.id);
+    if (existing) {
+      existing.qty += 1;
+    } else {
+      cart.push({ id: product.id, qty: 1 });
+    }
+    this.setState({ cart });
+  }
+
+  updateCartQty(id, delta) {
+    let cart = this.state.cart.map(c => c.id === id ? { ...c, qty: c.qty + delta } : c).filter(c => c.qty > 0);
+    this.setState({ cart });
+  }
+
+  async sendCartWhatsapp() {
+    const s = this.state;
+    const wpNum = this.props.whatsappNumber ?? s.whatsappNumber;
+    const lineItems = s.cart.map(c => {
+      const prod = s.products.find(p => p.id === c.id);
+      if (!prod) return null;
+      const price = parseFloat(prod.onSale && prod.salePrice ? prod.salePrice : prod.price) || 0;
+      return { prod, qty: c.qty, price };
+    }).filter(Boolean);
+    const total = lineItems.reduce((sum, li) => sum + li.price * li.qty, 0);
+
+    try {
+      const { data: order, error: orderErr } = await sb.from('orders').insert({
+        customer_phone: null,
+        total: total.toFixed(2),
+        status: 'pending'
+      }).select().single();
+      if (orderErr) throw orderErr;
+      const itemRows = lineItems.map(li => ({
+        order_id: order.id,
+        product_id: Number(li.prod.id),
+        quantity: li.qty,
+        unit_price: li.price,
+        subtotal: (li.price * li.qty).toFixed(2)
+      }));
+      const { error: itemsErr } = await sb.from('order_items').insert(itemRows);
+      if (itemsErr) throw itemsErr;
+    } catch (e) {
+      console.error('[perfusky] error guardando pedido:', e);
+    }
+
+    const itemsText = lineItems.map(li => `• ${li.prod.name} x${li.qty} ($${li.price})`).join('\n');
+    const msg = `Hola! Quiero estos productos:\n\n${itemsText}\n\nTotal: $${total.toFixed(2)}`;
+    window.open(`https://wa.me/${wpNum}?text=${encodeURIComponent(msg)}`, '_blank');
+  }
+
+  async tryLogin() {
+    this.setState({ loginBusy: true });
+    const { error } = await sb.auth.signInWithPassword({ email: ADMIN_EMAIL, password: this.state.loginInput });
+    if (error) {
+      console.error('[perfusky] login error:', error);
+      this.setState({ loginError: true, loginBusy: false });
+    } else {
+      this.setState({ view: 'admin', loginError: false, loginBusy: false, loginInput: '', isAuthed: true });
+    }
+  }
+
+  async uploadImage(file) {
+    const path = `${Date.now()}-${file.name}`.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const { error } = await sb.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file, { upsert: true });
+    if (error) {
+      console.error('[perfusky] error subiendo imagen:', error);
+      return null;
+    }
+    return sb.storage.from(PRODUCT_IMAGES_BUCKET).getPublicUrl(path).data.publicUrl;
+  }
+
+  async addCat() {
+    const name = this.state.newCatName.trim();
+    if (!name) return;
+    this.setState({ newCatName: '' });
+    const { data, error } = await sb.from('categories').insert({ name }).select().single();
+    if (error) { console.error('[perfusky] error creando categoría:', error); return; }
+    this.setState({ categories: [...this.state.categories, dbCategoryToUi(data)] });
+  }
+
+  async removeCategory(id) {
+    const { error } = await sb.from('categories').delete().eq('id', id);
+    if (error) { console.error('[perfusky] error borrando categoría:', error); return; }
+    this.setState({ categories: this.state.categories.filter(c => c.id !== id) });
+  }
+
+  async removeProduct(id) {
+    const { error } = await sb.from('products').delete().eq('id', id);
+    if (error) { console.error('[perfusky] error borrando producto:', error); return; }
+    this.setState({ products: this.state.products.filter(p => p.id !== id) });
+  }
+
+  async saveProd() {
+    const { prodName, prodCategory, prodPrice, prodDesc, prodImage, editingId, prodRatio, prodZoom, prodOnSale, prodOldPrice, prodSalePrice } = this.state;
+    if (!prodName.trim()) return;
+    const reset = { editingId: null, prodName: '', prodCategory: '', prodPrice: '', prodDesc: '', prodImage: '', prodRatio: '1', prodZoom: 100, prodOnSale: false, prodOldPrice: '', prodSalePrice: '' };
+    const payload = {
+      name: prodName,
+      category_id: prodCategory ? Number(prodCategory) : null,
+      price: prodPrice || null,
+      description: prodDesc,
+      image_url: prodImage || null,
+      image_ratio: prodRatio,
+      image_zoom: prodZoom,
+      on_sale: prodOnSale,
+      old_price: prodOldPrice || null,
+      sale_price: prodSalePrice || null
+    };
+    if (editingId) {
+      const { data, error } = await sb.from('products').update(payload).eq('id', editingId).select().single();
+      if (error) { console.error('[perfusky] error guardando producto:', error); return; }
+      const prods = this.state.products.map(p => p.id === editingId ? dbProductToUi(data) : p);
+      this.setState({ products: prods, ...reset });
+    } else {
+      const { data, error } = await sb.from('products').insert(payload).select().single();
+      if (error) { console.error('[perfusky] error creando producto:', error); return; }
+      this.setState({ products: [...this.state.products, dbProductToUi(data)], ...reset });
+    }
+  }
+}
+
+</script>
+</body>
+</html>
