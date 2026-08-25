@@ -157,6 +157,85 @@ function waLink(text) {
   return `https://wa.me/${state.whatsappNumber}?text=${encodeURIComponent(text)}`;
 }
 
+// ---------- Share ----------
+
+function productShareUrl(p) {
+  const base = window.location.origin + window.location.pathname;
+  return `${base}?producto=${encodeURIComponent(p.id)}`;
+}
+function productShareText(p) {
+  const finalPrice = p.onSale && p.salePrice ? `$${p.salePrice}` : (p.price ? `$${p.price}` : '');
+  return `Mirá este producto en Perfusky: ${p.name}${finalPrice ? ' - ' + finalPrice : ''}`;
+}
+
+function copyToClipboardFallback(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  let ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  document.body.removeChild(ta);
+  return ok;
+}
+
+async function copyToClipboard(text) {
+  if (!navigator.clipboard || !navigator.clipboard.writeText) return copyToClipboardFallback(text);
+  // Some browser/embed contexts leave the permission promise pending forever
+  // instead of rejecting, so race it against a timeout rather than await it directly.
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('clipboard-timeout')), 800));
+  try {
+    await Promise.race([navigator.clipboard.writeText(text), timeout]);
+    return true;
+  } catch (e) {
+    return copyToClipboardFallback(text);
+  }
+}
+
+function showShareFeedback(id, msg) {
+  state.shareFeedback = { id, msg };
+  render();
+  setTimeout(() => {
+    if (state.shareFeedback && state.shareFeedback.id === id) {
+      state.shareFeedback = null;
+      render();
+    }
+  }, 1800);
+}
+
+async function shareProductCopy(id) {
+  const p = state.products.find(p => p.id === id);
+  if (!p) return;
+  await copyToClipboard(productShareUrl(p));
+  showShareFeedback(id, '¡Enlace copiado!');
+}
+
+async function shareProductNative(id) {
+  const p = state.products.find(p => p.id === id);
+  if (!p) return;
+  if (navigator.share) {
+    setState({ shareMenuId: null });
+    try { await navigator.share({ title: 'Perfusky', text: productShareText(p), url: productShareUrl(p) }); } catch (e) { /* cancelled */ }
+  } else {
+    await copyToClipboard(productShareUrl(p));
+    showShareFeedback(id, '¡Enlace copiado!');
+  }
+}
+
+async function shareProductInstagram(id) {
+  const p = state.products.find(p => p.id === id);
+  if (!p) return;
+  if (navigator.share) {
+    setState({ shareMenuId: null });
+    try { await navigator.share({ title: 'Perfusky', text: productShareText(p), url: productShareUrl(p) }); } catch (e) { /* cancelled */ }
+  } else {
+    await copyToClipboard(productShareUrl(p));
+    showShareFeedback(id, 'Enlace copiado. Pegalo en tu Instagram.');
+  }
+}
+
 const state = {
   view: 'catalog', // catalog | login | admin
   loading: true,
@@ -179,6 +258,8 @@ const state = {
   cart: [],
   cartOpen: false,
   lightboxProductId: null,
+  shareMenuId: null,
+  shareFeedback: null,
   catMenuOpen: false,
   desktopCatMenuOpen: false,
   // admin form (uncontrolled inputs, values are read from the DOM; only bits that
@@ -787,6 +868,31 @@ function renderCatFilter() {
     </div>`;
 }
 
+function shareMenu(p) {
+  const url = productShareUrl(p);
+  const text = productShareText(p);
+  const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text + ' ' + url)}`;
+  const feedback = state.shareFeedback && state.shareFeedback.id === p.id ? state.shareFeedback.msg : '';
+  const itemStyle = 'display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 14px; background: none; border: none; font-family: inherit; font-size: 13px; color: #2d3436; cursor: pointer; text-decoration: none; white-space: nowrap';
+  return `
+    <div data-action="close-share-menu" style="position: fixed; inset: 0; z-index: 15"></div>
+    <div style="position: absolute; top: 46px; right: 8px; min-width: 195px; background: white; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.2); border: 1px solid #eee; z-index: 16; overflow: hidden; animation: fadeIn 0.15s ease; padding: 6px 0">
+      <a href="${waUrl}" target="_blank" data-action="close-share-menu" style="${itemStyle}">
+        <i data-lucide="message-circle" style="width: 15px; height: 15px; color: #25d366"></i> WhatsApp
+      </a>
+      <button data-action="share-instagram" data-id="${p.id}" style="${itemStyle}">
+        <i data-lucide="camera" style="width: 15px; height: 15px; color: #c13584"></i> Instagram
+      </button>
+      <button data-action="share-native" data-id="${p.id}" style="${itemStyle}">
+        <i data-lucide="share-2" style="width: 15px; height: 15px; color: #666"></i> Otras apps
+      </button>
+      <button data-action="share-copy" data-id="${p.id}" style="${itemStyle}">
+        <i data-lucide="link-2" style="width: 15px; height: 15px; color: #666"></i> Copiar enlace
+      </button>
+      ${feedback ? `<div style="padding: 6px 14px 8px; font-size: 11px; color: #25d366; font-weight: 600">${esc(feedback)}</div>` : ''}
+    </div>`;
+}
+
 function productCard(p) {
   const catName = getCatName(p.categoryId);
   const inCart = state.cart.some(c => c.id === p.id);
@@ -795,10 +901,14 @@ function productCard(p) {
   const zoomScale = (p.zoom || 100) / 100;
   return `
     <div class="card" style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); animation: fadeIn 0.3s ease; transition: transform 0.3s ease, box-shadow 0.3s ease">
-      <div data-r="card-img" ${p.image ? `data-action="open-lightbox" data-id="${p.id}"` : ''} style="width: 100%; aspect-ratio: 3/4; background: #f0ece6; display: flex; align-items: center; justify-content: center; overflow: hidden; ${p.image ? 'cursor: pointer' : ''}">
+      <div data-r="card-img" ${p.image ? `data-action="open-lightbox" data-id="${p.id}"` : ''} style="width: 100%; aspect-ratio: 3/4; background: #f0ece6; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; ${p.image ? 'cursor: pointer' : ''}">
         ${p.image
           ? `<img src="${esc(p.image)}" style="width: 100%; height: 100%; object-fit: cover; transform: scale(${zoomScale})" alt="${esc(p.name)}">`
           : `<span style="color: #ccc; font-size: 48px">📷</span>`}
+        <button data-action="toggle-share" data-id="${p.id}" style="position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border-radius: 50%; background: rgba(10,10,10,0.5); border: none; color: white; display: flex; align-items: center; justify-content: center; z-index: 2">
+          <i data-lucide="share-2" style="width: 15px; height: 15px"></i>
+        </button>
+        ${state.shareMenuId === p.id ? shareMenu(p) : ''}
       </div>
       <div data-r="card-info" style="padding: 16px">
         <div style="font-size: 11px; color: #d4a574; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px">${esc(catName)}</div>
@@ -1295,6 +1405,11 @@ app.addEventListener('click', (e) => {
     case 'cancel-edit': resetProductForm(); break;
     case 'open-lightbox': setState({ lightboxProductId: id }); break;
     case 'close-lightbox': setState({ lightboxProductId: null }); break;
+    case 'toggle-share': setState({ shareMenuId: state.shareMenuId === id ? null : id, shareFeedback: null }); break;
+    case 'close-share-menu': setState({ shareMenuId: null }); break;
+    case 'share-instagram': shareProductInstagram(id); break;
+    case 'share-native': shareProductNative(id); break;
+    case 'share-copy': shareProductCopy(id); break;
   }
 });
 
@@ -1332,7 +1447,9 @@ app.addEventListener('keydown', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && state.lightboxProductId) setState({ lightboxProductId: null });
+  if (e.key !== 'Escape') return;
+  if (state.lightboxProductId) setState({ lightboxProductId: null });
+  if (state.shareMenuId) setState({ shareMenuId: null });
 });
 
 // ---------- Init ----------
@@ -1343,6 +1460,10 @@ document.addEventListener('keydown', (e) => {
   await Promise.all([loadAll(), minWait]);
   if (window.location.hash === '#admin') {
     state.view = state.isAuthed ? 'admin' : 'login';
+  }
+  const sharedProductId = new URLSearchParams(window.location.search).get('producto');
+  if (sharedProductId && state.products.some(p => p.id === sharedProductId)) {
+    state.lightboxProductId = sharedProductId;
   }
   state.loading = false;
   render();
