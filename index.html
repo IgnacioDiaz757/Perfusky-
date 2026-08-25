@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Poppins', sans-serif; background: #faf9f7; color: #2d3436; }
+  body { font-family: 'Poppins', sans-serif; background: radial-gradient(circle at 15% 10%, rgba(58,143,212,0.06), transparent 35%), radial-gradient(circle at 85% 15%, rgba(107,78,207,0.06), transparent 35%), radial-gradient(circle at 50% 100%, rgba(232,99,43,0.05), transparent 40%), #faf7f2; background-attachment: fixed; color: #2d3436; }
   a { color: #d4a574; text-decoration: none; }
   a:hover { color: #b8895f; }
   button { cursor: pointer; }
@@ -121,6 +121,15 @@ const PRODUCT_IMAGES_BUCKET = 'product-images';
 const WHATSAPP_NUMBER = '5493515066285';
 const LOGO_SRC = 'uploads/logo.jpeg';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const PAGE_BG_PRESETS = [
+  { label: 'Aurora suave', value: 'radial-gradient(circle at 15% 10%, rgba(58,143,212,0.06), transparent 35%), radial-gradient(circle at 85% 15%, rgba(107,78,207,0.06), transparent 35%), radial-gradient(circle at 50% 100%, rgba(232,99,43,0.05), transparent 40%), #faf7f2' },
+  { label: 'Crema clásico', value: '#faf9f7' },
+  { label: 'Beige cálido', value: 'linear-gradient(160deg, #f7f1e8 0%, #efe3d2 100%)' },
+  { label: 'Perla', value: 'linear-gradient(180deg, #ffffff 0%, #f1ece4 100%)' },
+  { label: 'Mármol dorado', value: 'radial-gradient(circle at 20% 20%, rgba(212,165,116,0.12), transparent 40%), radial-gradient(circle at 80% 75%, rgba(107,78,207,0.08), transparent 45%), #faf8f4' },
+  { label: 'Noche elegante', value: 'linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 55%, #0a0a0a 100%)' }
+];
 
 function dbCategoryToUi(c) {
   return { id: String(c.id), name: c.name };
@@ -248,6 +257,7 @@ const state = {
   bannerActive: true,
   bannerText: '🔥 5% OFF en todos los productos — ¡Solo por tiempo limitado!',
   bannerBg: 'linear-gradient(90deg, #e74c3c, #c0392b)',
+  pageBg: PAGE_BG_PRESETS[0].value,
   superOffers: [],
   editingSuperOfferId: null,
   superOfferIndex: 0,
@@ -308,6 +318,7 @@ async function loadAll() {
     if ('banner_active' in settingsMap) state.bannerActive = settingsMap.banner_active === 'true';
     if ('banner_text' in settingsMap) state.bannerText = settingsMap.banner_text;
     if ('banner_bg' in settingsMap) state.bannerBg = settingsMap.banner_bg;
+    if ('page_bg' in settingsMap) state.pageBg = settingsMap.page_bg;
 
     state.superOffers = (superOffers || []).map(dbSuperOfferToUi);
   } catch (e) {
@@ -323,6 +334,11 @@ async function saveBanner() {
   ];
   const { error } = await sb.from('settings').upsert(rows, { onConflict: 'key' });
   if (error) console.error('[perfusky] error guardando banner:', error);
+}
+
+async function savePageBg() {
+  const { error } = await sb.from('settings').upsert({ key: 'page_bg', value: state.pageBg }, { onConflict: 'key' });
+  if (error) console.error('[perfusky] error guardando fondo de página:', error);
 }
 
 function resetSuperOfferForm() {
@@ -623,6 +639,12 @@ function setProdOnSale(checked) {
 function setBannerBg(bg) {
   state.bannerBg = bg;
   saveBanner();
+  render();
+}
+
+function setPageBg(bg) {
+  state.pageBg = bg;
+  savePageBg();
   render();
 }
 
@@ -1128,6 +1150,15 @@ function bannerSwatch(bg, key) {
   return `<button data-action="set-banner-bg" data-bg="${esc(bg)}" class="swatch" style="width: 36px; height: 36px; border-radius: 8px; border: 2px solid ${active ? '#2d3436' : 'transparent'}; background: ${bg}; transition: transform 0.2s"></button>`;
 }
 
+function pageBgSwatch(preset) {
+  const active = state.pageBg === preset.value;
+  const isDark = preset.label === 'Noche elegante';
+  return `
+    <button data-action="set-page-bg" data-bg="${esc(preset.value)}" class="swatch" style="width: 92px; height: 60px; border-radius: 10px; border: 2px solid ${active ? '#2d3436' : '#eee'}; background: ${preset.value}; transition: transform 0.2s; display: flex; align-items: flex-end; padding: 6px; overflow: hidden">
+      <span style="font-size: 10px; font-weight: 600; color: ${isDark ? 'rgba(255,255,255,0.7)' : '#888'}">${esc(preset.label)}</span>
+    </button>`;
+}
+
 function renderProductForm() {
   const catOptions = state.categories.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
   const editingProduct = state.editingId ? state.products.find(p => p.id === state.editingId) : null;
@@ -1314,6 +1345,14 @@ function renderAdmin() {
             </div>
           </div>
         </div>
+        <!-- FONDO DE LA PÁGINA -->
+        <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px">Fondo de la página</div>
+          <div style="font-size: 12px; color: #aaa; margin-bottom: 16px">Elegí el fondo que se ve detrás del catálogo.</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            ${PAGE_BG_PRESETS.map(pageBgSwatch).join('')}
+          </div>
+        </div>
         <!-- SUPER OFERTAS -->
         <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
           <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px">⭐ Super Ofertas Destacadas</div>
@@ -1365,6 +1404,7 @@ function renderAdmin() {
 // ---------- Main render ----------
 
 function render() {
+  document.body.style.background = state.pageBg;
   let html = '';
   if (state.loading) html += renderLoading();
   if (state.view === 'catalog') html += renderCatalog();
@@ -1399,6 +1439,7 @@ app.addEventListener('click', (e) => {
     case 'go-catalog': goCatalog(); break;
     case 'try-login': tryLogin(); break;
     case 'set-banner-bg': setBannerBg(el.dataset.bg); break;
+    case 'set-page-bg': setPageBg(el.dataset.bg); break;
     case 'save-banner-text': saveBannerTextClick(); break;
     case 'save-super-offer': saveSuperOfferClick(); break;
     case 'edit-super-offer': editSuperOffer(id); break;
