@@ -1063,15 +1063,24 @@ function renderLightbox() {
   const p = state.products.find(p => p.id === state.lightboxProductId);
   if (!p || !p.image) return '';
   const zoomScale = (p.zoom || 100) / 100;
+  const finalPrice = p.onSale && p.salePrice ? `$${p.salePrice}` : (p.price ? `$${p.price}` : '');
+  const priceColor = p.onSale ? '#e74c3c' : '#2d3436';
   return `
     <div style="position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; padding: 32px">
       <div data-action="close-lightbox" style="position: absolute; inset: 0; background: rgba(10,10,10,0.8)"></div>
-      <div style="position: relative; width: 100%; max-width: 420px; z-index: 1; animation: fadeIn 0.2s ease">
-        <button data-action="close-lightbox" class="link-btn" style="position: absolute; top: -44px; right: 0; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: white; font-size: 20px; line-height: 1; cursor: pointer">×</button>
-        <div style="width: 100%; aspect-ratio: 3/4; border-radius: 14px; overflow: hidden; background: #f0ece6; box-shadow: 0 20px 60px rgba(0,0,0,0.4)">
-          <img src="${esc(p.image)}" style="width: 100%; height: 100%; object-fit: cover; transform: scale(${zoomScale})" alt="${esc(p.name)}">
+      <div style="position: relative; width: 100%; max-width: 420px; max-height: 100%; z-index: 1; animation: fadeIn 0.2s ease; display: flex; flex-direction: column">
+        <button data-action="close-lightbox" class="link-btn" style="position: absolute; top: -44px; right: 0; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: white; font-size: 20px; line-height: 1; cursor: pointer; z-index: 2">×</button>
+        <div style="background: white; border-radius: 14px; overflow-y: auto; max-height: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.4)">
+          <div style="width: 100%; aspect-ratio: 3/4; background: #f0ece6; overflow: hidden">
+            <img src="${esc(p.image)}" style="width: 100%; height: 100%; object-fit: cover; transform: scale(${zoomScale})" alt="${esc(p.name)}">
+          </div>
+          <div style="padding: 18px 20px 22px">
+            <div style="font-size: 11px; color: #d4a574; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px">${esc(getCatName(p.categoryId))}</div>
+            <div style="font-size: 17px; font-weight: 700; margin-bottom: 8px">${esc(p.name)}</div>
+            ${p.description ? `<div style="font-size: 13px; color: #666; line-height: 1.6; white-space: pre-wrap; margin-bottom: 12px">${esc(p.description)}</div>` : ''}
+            ${finalPrice ? `<span style="font-size: 18px; font-weight: 700; color: ${priceColor}">${esc(finalPrice)}</span>` : ''}
+          </div>
         </div>
-        <div style="text-align: center; color: white; font-size: 14px; font-weight: 600; margin-top: 12px">${esc(p.name)}</div>
       </div>
     </div>`;
 }
