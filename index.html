@@ -9,7 +9,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Poppins', sans-serif; background: radial-gradient(circle at 15% 10%, rgba(58,143,212,0.06), transparent 35%), radial-gradient(circle at 85% 15%, rgba(107,78,207,0.06), transparent 35%), radial-gradient(circle at 50% 100%, rgba(232,99,43,0.05), transparent 40%), #faf7f2; background-attachment: fixed; color: #2d3436; }
+  body { font-family: 'Poppins', sans-serif; background: radial-gradient(circle at 15% 10%, rgba(58,143,212,0.06), transparent 35%), radial-gradient(circle at 85% 15%, rgba(107,78,207,0.06), transparent 35%), radial-gradient(circle at 50% 100%, rgba(232,99,43,0.05), transparent 40%), #faf7f2; color: #2d3436; }
   a { color: #d4a574; text-decoration: none; }
   a:hover { color: #b8895f; }
   button { cursor: pointer; }
@@ -258,6 +258,7 @@ const state = {
   bannerText: '🔥 5% OFF en todos los productos — ¡Solo por tiempo limitado!',
   bannerBg: 'linear-gradient(90deg, #e74c3c, #c0392b)',
   pageBg: PAGE_BG_PRESETS[0].value,
+  pageBgImage: '',
   superOffers: [],
   editingSuperOfferId: null,
   superOfferIndex: 0,
@@ -319,6 +320,7 @@ async function loadAll() {
     if ('banner_text' in settingsMap) state.bannerText = settingsMap.banner_text;
     if ('banner_bg' in settingsMap) state.bannerBg = settingsMap.banner_bg;
     if ('page_bg' in settingsMap) state.pageBg = settingsMap.page_bg;
+    if ('page_bg_image' in settingsMap) state.pageBgImage = settingsMap.page_bg_image;
 
     state.superOffers = (superOffers || []).map(dbSuperOfferToUi);
   } catch (e) {
@@ -337,7 +339,11 @@ async function saveBanner() {
 }
 
 async function savePageBg() {
-  const { error } = await sb.from('settings').upsert({ key: 'page_bg', value: state.pageBg }, { onConflict: 'key' });
+  const rows = [
+    { key: 'page_bg', value: state.pageBg },
+    { key: 'page_bg_image', value: state.pageBgImage }
+  ];
+  const { error } = await sb.from('settings').upsert(rows, { onConflict: 'key' });
   if (error) console.error('[perfusky] error guardando fondo de página:', error);
 }
 
@@ -644,6 +650,24 @@ function setBannerBg(bg) {
 
 function setPageBg(bg) {
   state.pageBg = bg;
+  state.pageBgImage = '';
+  savePageBg();
+  render();
+}
+
+async function onPageBgImageChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = await uploadImage(file);
+  if (url) {
+    state.pageBgImage = url;
+    savePageBg();
+    render();
+  }
+}
+
+function removePageBgImage() {
+  state.pageBgImage = '';
   savePageBg();
   render();
 }
@@ -1349,8 +1373,23 @@ function renderAdmin() {
         <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
           <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px">Fondo de la página</div>
           <div style="font-size: 12px; color: #aaa; margin-bottom: 16px">Elegí el fondo que se ve detrás del catálogo.</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px">
             ${PAGE_BG_PRESETS.map(pageBgSwatch).join('')}
+          </div>
+          <div style="border-top: 1px solid #f0f0f0; padding-top: 16px">
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 8px; display: block">O subí tu propia imagen de fondo</label>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+              <label class="file-label" style="padding: 10px 20px; background: #f0ece6; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; color: #2d3436; display: inline-flex; align-items: center; gap: 6px">
+                <i data-lucide="upload" style="width: 14px; height: 14px"></i> Elegir imagen
+                <input type="file" accept="image/*" data-action="page-bg-image" style="display: none">
+              </label>
+              ${state.pageBgImage ? `
+              <img src="${esc(state.pageBgImage)}" style="width: 100px; height: 60px; border-radius: 8px; object-fit: cover; border: 2px solid #eee">
+              <button data-action="remove-page-bg-image" class="danger-btn" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: inherit; color: #e74c3c">Quitar imagen</button>` : ''}
+            </div>
+            <div style="font-size: 11px; color: #aaa; line-height: 1.5; margin-top: 10px">
+              Recomendado: imagen horizontal, mínimo 1920×1080px, con colores suaves y poco contraste (para que no le compita a los productos). Formato JPG liviano (menos de 1MB) para que cargue rápido. Se aplica un velo claro encima para que el texto y las cards se sigan leyendo bien.
+            </div>
           </div>
         </div>
         <!-- SUPER OFERTAS -->
@@ -1404,7 +1443,9 @@ function renderAdmin() {
 // ---------- Main render ----------
 
 function render() {
-  document.body.style.background = state.pageBg;
+  document.body.style.background = state.pageBgImage
+    ? `linear-gradient(rgba(250,247,242,0.82), rgba(250,247,242,0.82)), url('${state.pageBgImage}') center / cover no-repeat`
+    : state.pageBg;
   let html = '';
   if (state.loading) html += renderLoading();
   if (state.view === 'catalog') html += renderCatalog();
@@ -1440,6 +1481,7 @@ app.addEventListener('click', (e) => {
     case 'try-login': tryLogin(); break;
     case 'set-banner-bg': setBannerBg(el.dataset.bg); break;
     case 'set-page-bg': setPageBg(el.dataset.bg); break;
+    case 'remove-page-bg-image': removePageBgImage(); break;
     case 'save-banner-text': saveBannerTextClick(); break;
     case 'save-super-offer': saveSuperOfferClick(); break;
     case 'edit-super-offer': editSuperOffer(id); break;
@@ -1473,6 +1515,7 @@ app.addEventListener('change', (e) => {
     if (action === 'toggle-prod-sale') { setProdOnSale(el.checked); return; }
     if (action === 'prod-image') { onProdImageChange(e); return; }
     if (action === 'so-image') { onSuperOfferImageChange(e); return; }
+    if (action === 'page-bg-image') { onPageBgImageChange(e); return; }
   }
 });
 
