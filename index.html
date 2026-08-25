@@ -1444,7 +1444,7 @@ function renderAdmin() {
 
 function render() {
   document.body.style.background = state.pageBgImage
-    ? `linear-gradient(rgba(250,247,242,0.82), rgba(250,247,242,0.82)), url('${state.pageBgImage}') center / cover no-repeat`
+    ? `linear-gradient(rgba(250,247,242,0.22), rgba(250,247,242,0.22)), url('${state.pageBgImage}') center / cover no-repeat`
     : state.pageBg;
   let html = '';
   if (state.loading) html += renderLoading();
