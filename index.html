@@ -358,7 +358,7 @@ async function toggleSuperOfferRowActive(id, checked) {
 
 async function saveSuperOfferClick() {
   const name = document.getElementById('so-name').value.trim();
-  if (!name) return;
+  if (!name && !state.soImage) return;
   const desc = document.getElementById('so-desc').value;
   const oldPrice = document.getElementById('so-old-price').value;
   const price = document.getElementById('so-price').value;
