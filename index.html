@@ -131,6 +131,15 @@ const PAGE_BG_PRESETS = [
   { label: 'Noche elegante', value: 'linear-gradient(160deg, #0a0a0a 0%, #1a1a2e 55%, #0a0a0a 100%)' }
 ];
 
+const FOOTER_BG_PRESETS = [
+  { label: 'Noche elegante', value: 'linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%)' },
+  { label: 'Negro puro', value: '#0a0a0a' },
+  { label: 'Azul profundo', value: 'linear-gradient(135deg, #0a1628 0%, #16213e 100%)' },
+  { label: 'Violeta noche', value: 'linear-gradient(135deg, #1a1a2e 0%, #2d1b4e 100%)' },
+  { label: 'Beige cálido', value: 'linear-gradient(160deg, #f7f1e8 0%, #efe3d2 100%)' },
+  { label: 'Crema clásico', value: '#faf9f7' }
+];
+
 function dbCategoryToUi(c) {
   return { id: String(c.id), name: c.name };
 }
@@ -259,6 +268,8 @@ const state = {
   bannerBg: 'linear-gradient(90deg, #e74c3c, #c0392b)',
   pageBg: PAGE_BG_PRESETS[0].value,
   pageBgImage: '',
+  footerBg: FOOTER_BG_PRESETS[0].value,
+  footerBgImage: '',
   superOffers: [],
   editingSuperOfferId: null,
   superOfferIndex: 0,
@@ -321,6 +332,8 @@ async function loadAll() {
     if ('banner_bg' in settingsMap) state.bannerBg = settingsMap.banner_bg;
     if ('page_bg' in settingsMap) state.pageBg = settingsMap.page_bg;
     if ('page_bg_image' in settingsMap) state.pageBgImage = settingsMap.page_bg_image;
+    if ('footer_bg' in settingsMap) state.footerBg = settingsMap.footer_bg;
+    if ('footer_bg_image' in settingsMap) state.footerBgImage = settingsMap.footer_bg_image;
 
     state.superOffers = (superOffers || []).map(dbSuperOfferToUi);
   } catch (e) {
@@ -345,6 +358,15 @@ async function savePageBg() {
   ];
   const { error } = await sb.from('settings').upsert(rows, { onConflict: 'key' });
   if (error) console.error('[perfusky] error guardando fondo de página:', error);
+}
+
+async function saveFooterBg() {
+  const rows = [
+    { key: 'footer_bg', value: state.footerBg },
+    { key: 'footer_bg_image', value: state.footerBgImage }
+  ];
+  const { error } = await sb.from('settings').upsert(rows, { onConflict: 'key' });
+  if (error) console.error('[perfusky] error guardando fondo del footer:', error);
 }
 
 function resetSuperOfferForm() {
@@ -669,6 +691,30 @@ async function onPageBgImageChange(e) {
 function removePageBgImage() {
   state.pageBgImage = '';
   savePageBg();
+  render();
+}
+
+function setFooterBg(bg) {
+  state.footerBg = bg;
+  state.footerBgImage = '';
+  saveFooterBg();
+  render();
+}
+
+async function onFooterBgImageChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = await uploadImage(file);
+  if (url) {
+    state.footerBgImage = url;
+    saveFooterBg();
+    render();
+  }
+}
+
+function removeFooterBgImage() {
+  state.footerBgImage = '';
+  saveFooterBg();
   render();
 }
 
@@ -1084,8 +1130,11 @@ function renderCartDrawer() {
 }
 
 function renderFooter() {
+  const footerBackground = state.footerBgImage
+    ? `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), url('${esc(state.footerBgImage)}') center / cover no-repeat`
+    : state.footerBg;
   return `
-    <div data-r="footer" style="margin-top: auto; background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0a0a0a 100%); padding: 32px 40px">
+    <div data-r="footer" style="margin-top: auto; background: ${footerBackground}; padding: 32px 40px">
       <div data-r="footer-top" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 20px">
         <div style="display: flex; align-items: center; gap: 12px">
           <img src="${LOGO_SRC}" style="height: 40px; width: 40px; border-radius: 50%; object-fit: cover" alt="Perfusky">
@@ -1179,6 +1228,15 @@ function pageBgSwatch(preset) {
   const isDark = preset.label === 'Noche elegante';
   return `
     <button data-action="set-page-bg" data-bg="${esc(preset.value)}" class="swatch" style="width: 92px; height: 60px; border-radius: 10px; border: 2px solid ${active ? '#2d3436' : '#eee'}; background: ${preset.value}; transition: transform 0.2s; display: flex; align-items: flex-end; padding: 6px; overflow: hidden">
+      <span style="font-size: 10px; font-weight: 600; color: ${isDark ? 'rgba(255,255,255,0.7)' : '#888'}">${esc(preset.label)}</span>
+    </button>`;
+}
+
+function footerBgSwatch(preset) {
+  const active = state.footerBg === preset.value;
+  const isDark = preset.label !== 'Beige cálido' && preset.label !== 'Crema clásico';
+  return `
+    <button data-action="set-footer-bg" data-bg="${esc(preset.value)}" class="swatch" style="width: 92px; height: 60px; border-radius: 10px; border: 2px solid ${active ? '#2d3436' : '#eee'}; background: ${preset.value}; transition: transform 0.2s; display: flex; align-items: flex-end; padding: 6px; overflow: hidden">
       <span style="font-size: 10px; font-weight: 600; color: ${isDark ? 'rgba(255,255,255,0.7)' : '#888'}">${esc(preset.label)}</span>
     </button>`;
 }
@@ -1392,6 +1450,29 @@ function renderAdmin() {
             </div>
           </div>
         </div>
+        <!-- FONDO DEL FOOTER -->
+        <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px">Fondo del footer</div>
+          <div style="font-size: 12px; color: #aaa; margin-bottom: 16px">Elegí el color o la imagen que se ve en el pie de página.</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px">
+            ${FOOTER_BG_PRESETS.map(footerBgSwatch).join('')}
+          </div>
+          <div style="border-top: 1px solid #f0f0f0; padding-top: 16px">
+            <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 8px; display: block">O subí tu propia imagen de fondo</label>
+            <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap">
+              <label class="file-label" style="padding: 10px 20px; background: #f0ece6; border-radius: 8px; font-size: 13px; cursor: pointer; font-weight: 500; color: #2d3436; display: inline-flex; align-items: center; gap: 6px">
+                <i data-lucide="upload" style="width: 14px; height: 14px"></i> Elegir imagen
+                <input type="file" accept="image/*" data-action="footer-bg-image" style="display: none">
+              </label>
+              ${state.footerBgImage ? `
+              <img src="${esc(state.footerBgImage)}" style="width: 100px; height: 60px; border-radius: 8px; object-fit: cover; border: 2px solid #eee">
+              <button data-action="remove-footer-bg-image" class="danger-btn" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: inherit; color: #e74c3c">Quitar imagen</button>` : ''}
+            </div>
+            <div style="font-size: 11px; color: #aaa; line-height: 1.5; margin-top: 10px">
+              Recomendado: imagen horizontal liviana (menos de 1MB). Se aplica un velo oscuro encima para que el texto blanco del footer se siga leyendo bien.
+            </div>
+          </div>
+        </div>
         <!-- SUPER OFERTAS -->
         <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
           <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px">⭐ Super Ofertas Destacadas</div>
@@ -1482,6 +1563,8 @@ app.addEventListener('click', (e) => {
     case 'set-banner-bg': setBannerBg(el.dataset.bg); break;
     case 'set-page-bg': setPageBg(el.dataset.bg); break;
     case 'remove-page-bg-image': removePageBgImage(); break;
+    case 'set-footer-bg': setFooterBg(el.dataset.bg); break;
+    case 'remove-footer-bg-image': removeFooterBgImage(); break;
     case 'save-banner-text': saveBannerTextClick(); break;
     case 'save-super-offer': saveSuperOfferClick(); break;
     case 'edit-super-offer': editSuperOffer(id); break;
@@ -1516,6 +1599,7 @@ app.addEventListener('change', (e) => {
     if (action === 'prod-image') { onProdImageChange(e); return; }
     if (action === 'so-image') { onSuperOfferImageChange(e); return; }
     if (action === 'page-bg-image') { onPageBgImageChange(e); return; }
+    if (action === 'footer-bg-image') { onFooterBgImageChange(e); return; }
   }
 });
 
