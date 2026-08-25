@@ -34,7 +34,6 @@
   .fab:active { transform: scale(0.95); }
   .carousel-arrow:hover { transform: translateY(-50%) scale(1.1) !important; background: rgba(0,0,0,0.55) !important; }
   .carousel-arrow:active { transform: translateY(-50%) scale(0.95) !important; }
-  .cat-tab:hover { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.12); }
   .swatch:hover { transform: scale(1.1); }
   .admin-row:hover { border-color: #ddd !important; }
   .link-btn:hover { color: #333 !important; }
@@ -181,6 +180,7 @@ const state = {
   cartOpen: false,
   lightboxProductId: null,
   catMenuOpen: false,
+  desktopCatMenuOpen: false,
   // admin form (uncontrolled inputs, values are read from the DOM; only bits that
   // don't live in a plain text input are tracked here)
   prodImage: '',
@@ -643,15 +643,19 @@ function renderHeader() {
     </div>`;
 }
 
-function renderMobileCatMenu() {
-  if (!state.catMenuOpen) return '';
+function catMenuItemsHTML(selectAction, hPad) {
   const allSelected = !state.selectedCategory;
-  const rowStyle = (active) => `display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; padding: 14px 20px; background: none; border: none; border-bottom: 1px solid #f0f0f0; font-family: inherit; font-size: 14px; font-weight: ${active ? '600' : '400'}; color: ${active ? '#2d3436' : '#666'}`;
-  const checkIcon = `<i data-lucide="check" style="width: 16px; height: 16px; color: #2d3436"></i>`;
+  const rowStyle = (active) => `display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; padding: 12px ${hPad}px; background: none; border: none; font-family: inherit; font-size: 13px; font-weight: ${active ? '600' : '400'}; color: ${active ? '#2d3436' : '#666'}; cursor: pointer; white-space: nowrap`;
+  const checkIcon = `<i data-lucide="check" style="width: 14px; height: 14px; color: #2d3436; flex-shrink: 0"></i>`;
   const items = state.categories.map(c => {
     const active = state.selectedCategory === c.id;
-    return `<button data-action="select-cat-mobile" data-id="${c.id}" style="${rowStyle(active)}"><span>${esc(c.name)}</span>${active ? checkIcon : ''}</button>`;
+    return `<button data-action="${selectAction}" data-id="${c.id}" style="${rowStyle(active)}"><span>${esc(c.name)}</span>${active ? checkIcon : ''}</button>`;
   }).join('');
+  return `<button data-action="${selectAction}" data-id="" style="${rowStyle(allSelected)}"><span>Todos</span>${allSelected ? checkIcon : ''}</button>${items}`;
+}
+
+function renderMobileCatMenu() {
+  if (!state.catMenuOpen) return '';
   return `
     <div data-action="close-cat-menu" style="position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.4)"></div>
     <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 151; background: white; border-radius: 0 0 16px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto; animation: fadeIn 0.2s ease">
@@ -659,8 +663,7 @@ function renderMobileCatMenu() {
         <span style="font-size: 14px; font-weight: 700; color: #2d3436; text-transform: uppercase; letter-spacing: 1px">Categorías</span>
         <button data-action="close-cat-menu" class="link-btn" style="background: none; border: none; color: #aaa; font-size: 22px; line-height: 1; padding: 4px">×</button>
       </div>
-      <button data-action="select-cat-mobile" data-id="" style="${rowStyle(allSelected)}"><span>Todos</span>${allSelected ? checkIcon : ''}</button>
-      ${items}
+      <div style="padding: 6px 0 8px">${catMenuItemsHTML('select-cat-mobile', 20)}</div>
     </div>`;
 }
 
@@ -765,16 +768,22 @@ function renderSuperOfferSection() {
     </div>`;
 }
 
-function renderCatTabs() {
-  const allSelected = !state.selectedCategory;
-  const tabs = state.categories.map(c => {
-    const active = state.selectedCategory === c.id;
-    return `<button class="cat-tab" data-action="select-cat" data-id="${c.id}" style="padding: 8px 20px; border-radius: 24px; border: 2px solid ${active ? '#2d3436' : '#e0e0e0'}; font-family: inherit; font-size: 13px; background: ${active ? 'linear-gradient(135deg, #2d3436, #3d4d4f)' : 'white'}; color: ${active ? 'white' : '#555'}; font-weight: 500; letter-spacing: 0.3px; transition: all 0.25s ease; box-shadow: ${active ? '0 2px 6px rgba(45,52,54,0.3)' : '0 1px 3px rgba(0,0,0,0.04)'}">${esc(c.name)}</button>`;
-  }).join('');
+function renderCatFilter() {
+  const current = state.selectedCategory ? (state.categories.find(c => c.id === state.selectedCategory)?.name || 'Todos') : 'Todos';
   return `
-    <div data-r="cat-tabs" style="padding: 16px 40px; background: white; border-bottom: 1px solid #eee; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-top: 8px">
-      <button class="cat-tab" data-action="select-cat" data-id="" style="padding: 8px 20px; border-radius: 24px; border: 2px solid ${allSelected ? '#2d3436' : '#e0e0e0'}; font-family: inherit; font-size: 13px; background: ${allSelected ? 'linear-gradient(135deg, #2d3436, #3d4d4f)' : 'white'}; color: ${allSelected ? 'white' : '#555'}; font-weight: 600; letter-spacing: 0.5px; transition: all 0.25s ease; box-shadow: ${allSelected ? '0 2px 6px rgba(45,52,54,0.3)' : '0 1px 3px rgba(0,0,0,0.04)'}">Todos</button>
-      ${tabs}
+    <div data-r="cat-tabs" style="padding: 14px 40px; background: white; border-bottom: 1px solid #eee; display: flex; align-items: center; margin-top: 8px">
+      <div style="position: relative; display: inline-block">
+        <button data-action="toggle-cat-filter" style="display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 24px; border: 2px solid ${state.desktopCatMenuOpen ? '#2d3436' : '#e0e0e0'}; background: white; font-family: inherit; font-size: 13px; font-weight: 600; color: #2d3436">
+          <i data-lucide="sliders-horizontal" style="width: 14px; height: 14px; color: #888"></i>
+          <span>Categoría: ${esc(current)}</span>
+          <i data-lucide="chevron-down" style="width: 14px; height: 14px; color: #888; transition: transform 0.2s; transform: rotate(${state.desktopCatMenuOpen ? '180deg' : '0deg'})"></i>
+        </button>
+        ${state.desktopCatMenuOpen ? `
+        <div data-action="close-cat-filter" style="position: fixed; inset: 0; z-index: 60"></div>
+        <div style="position: absolute; top: calc(100% + 8px); left: 0; min-width: 200px; background: white; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.15); border: 1px solid #eee; z-index: 61; overflow: hidden; animation: fadeIn 0.15s ease; padding: 6px 0">
+          ${catMenuItemsHTML('select-cat-desktop', 16)}
+        </div>` : ''}
+      </div>
     </div>`;
 }
 
@@ -964,7 +973,7 @@ function renderCatalog() {
       ${renderMobileCatMenu()}
       ${renderBanner()}
       ${renderSuperOfferSection()}
-      ${renderCatTabs()}
+      ${renderCatFilter()}
       <div id="grid-wrap" data-r="products-wrap" style="padding: 32px 40px">
         ${renderGrid()}
       </div>
@@ -1253,10 +1262,12 @@ app.addEventListener('click', (e) => {
   const action = el.dataset.action;
   const id = el.dataset.id;
   switch (action) {
-    case 'select-cat': setState({ selectedCategory: id || null }); break;
     case 'toggle-cat-menu': setState({ catMenuOpen: !state.catMenuOpen }); break;
     case 'close-cat-menu': setState({ catMenuOpen: false }); break;
     case 'select-cat-mobile': setState({ selectedCategory: id || null, catMenuOpen: false }); break;
+    case 'toggle-cat-filter': setState({ desktopCatMenuOpen: !state.desktopCatMenuOpen }); break;
+    case 'close-cat-filter': setState({ desktopCatMenuOpen: false }); break;
+    case 'select-cat-desktop': setState({ selectedCategory: id || null, desktopCatMenuOpen: false }); break;
     case 'add-to-cart': addToCart(id); break;
     case 'toggle-cart': setState({ cartOpen: !state.cartOpen }); break;
     case 'close-cart': setState({ cartOpen: false }); break;
