@@ -9,7 +9,36 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'Poppins', sans-serif; background: radial-gradient(circle at 15% 10%, rgba(58,143,212,0.06), transparent 35%), radial-gradient(circle at 85% 15%, rgba(107,78,207,0.06), transparent 35%), radial-gradient(circle at 50% 100%, rgba(232,99,43,0.05), transparent 40%), #faf7f2; color: #2d3436; }
+  :root {
+    --surface: #ffffff;
+    --surface-alt: #f0ece6;
+    --surface-soft: #faf9f7;
+    --surface-hover: #f5f5f5;
+    --badge-bg: #f0f0f0;
+    --text: #2d3436;
+    --text-secondary: #666666;
+    --text-muted: #888888;
+    --text-faint: #aaaaaa;
+    --text-ghost: #cccccc;
+    --border: #eeeeee;
+    --border-strong: #e0e0e0;
+  }
+  html[data-theme="dark"] {
+    --surface: #1c1c22;
+    --surface-alt: #2a2a32;
+    --surface-soft: #24242c;
+    --surface-hover: #33333c;
+    --badge-bg: #33333c;
+    --text: #f1f1f1;
+    --text-secondary: #cfcfcf;
+    --text-muted: #9c9ca6;
+    --text-faint: #7d7d87;
+    --text-ghost: #5a5a63;
+    --border: #33333c;
+    --border-strong: #40404a;
+  }
+  html[data-theme="dark"] body { background: linear-gradient(160deg, #0f0f14 0%, #16161d 100%) !important; }
+  body { font-family: 'Poppins', sans-serif; background: radial-gradient(circle at 15% 10%, rgba(58,143,212,0.06), transparent 35%), radial-gradient(circle at 85% 15%, rgba(107,78,207,0.06), transparent 35%), radial-gradient(circle at 50% 100%, rgba(232,99,43,0.05), transparent 40%), #faf7f2; color: var(--text); transition: background 0.2s ease; }
   a { color: #d4a574; text-decoration: none; }
   a:hover { color: #b8895f; }
   button { cursor: pointer; }
@@ -48,6 +77,8 @@
   .admin-back:active { transform: scale(0.97); }
   .admin-link:hover { color: rgba(255,255,255,0.7) !important; }
   .footer-admin:hover { color: rgba(255,255,255,0.4) !important; }
+  .theme-toggle:hover { background: rgba(255,255,255,0.16) !important; transform: scale(1.05); }
+  .theme-toggle:active { transform: scale(0.94); }
   /* Tablet */
   @media (max-width: 1024px) {
     [data-r="header-inner"] { padding: 16px 20px 14px !important; }
@@ -155,7 +186,18 @@ function dbProductToUi(p) {
     salePrice: p.sale_price != null ? String(p.sale_price) : '',
     image: p.image_url || '',
     ratio: p.image_ratio || '1',
-    zoom: p.image_zoom || 100
+    zoom: p.image_zoom || 100,
+    stock: p.stock === undefined ? null : p.stock
+  };
+}
+function dbCouponToUi(c) {
+  return {
+    id: String(c.id),
+    code: c.code,
+    discountType: c.discount_type,
+    discountValue: c.discount_value != null ? String(c.discount_value) : '',
+    active: !!c.active,
+    expiresAt: c.expires_at || ''
   };
 }
 function dbSuperOfferToUi(o) {
@@ -255,6 +297,22 @@ async function shareProductInstagram(id) {
   }
 }
 
+const THEME_STORAGE_KEY = 'perfusky-theme';
+
+function initialTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    if (saved === 'light' || saved === 'dark') return saved;
+  } catch (e) { /* localStorage no disponible */ }
+  return (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+}
+
+function toggleTheme() {
+  state.theme = state.theme === 'dark' ? 'light' : 'dark';
+  try { localStorage.setItem(THEME_STORAGE_KEY, state.theme); } catch (e) { /* localStorage no disponible */ }
+  render();
+}
+
 const state = {
   view: 'catalog', // catalog | login | admin
   loading: true,
@@ -280,11 +338,20 @@ const state = {
   isAuthed: false,
   cart: [],
   cartOpen: false,
+  coupons: [],
+  editingCouponId: null,
+  appliedCoupon: null,
+  couponError: '',
+  adminTab: 'general',
+  orders: [],
+  ordersLoaded: false,
+  metricsLoading: false,
   lightboxProductId: null,
   shareMenuId: null,
   shareFeedback: null,
   catMenuOpen: false,
   desktopCatMenuOpen: false,
+  theme: initialTheme(),
   // admin form (uncontrolled inputs, values are read from the DOM; only bits that
   // don't live in a plain text input are tracked here)
   prodImage: '',
@@ -308,17 +375,19 @@ function initLucide() {
 
 async function loadAll() {
   try {
-    const [{ data: cats, error: catErr }, { data: prods, error: prodErr }, { data: settings, error: setErr }, { data: superOffers, error: soErr }, { data: { session } }] = await Promise.all([
+    const [{ data: cats, error: catErr }, { data: prods, error: prodErr }, { data: settings, error: setErr }, { data: superOffers, error: soErr }, { data: coupons, error: couponErr }, { data: { session } }] = await Promise.all([
       sb.from('categories').select('*').order('name'),
       sb.from('products').select('*').eq('is_active', true).order('created_at', { ascending: false }),
       sb.from('settings').select('*'),
       sb.from('super_offer').select('*').order('created_at', { ascending: true }).limit(3),
+      sb.from('coupons').select('*').order('created_at', { ascending: false }),
       sb.auth.getSession()
     ]);
     if (catErr) console.error('[perfusky] error cargando categorías:', catErr);
     if (prodErr) console.error('[perfusky] error cargando productos:', prodErr);
     if (setErr) console.error('[perfusky] error cargando configuración:', setErr);
     if (soErr) console.error('[perfusky] error cargando super oferta:', soErr);
+    if (couponErr) console.error('[perfusky] error cargando cupones:', couponErr);
 
     state.categories = (cats || []).map(dbCategoryToUi);
     state.products = (prods || []).map(dbProductToUi);
@@ -336,9 +405,25 @@ async function loadAll() {
     if ('footer_bg_image' in settingsMap) state.footerBgImage = settingsMap.footer_bg_image;
 
     state.superOffers = (superOffers || []).map(dbSuperOfferToUi);
+    state.coupons = (coupons || []).map(dbCouponToUi);
   } catch (e) {
     console.error('[perfusky] fallo al cargar datos de Supabase:', e);
   }
+}
+
+async function loadOrdersForMetrics() {
+  if (state.ordersLoaded || state.metricsLoading) return;
+  state.metricsLoading = true;
+  render();
+  const { data, error } = await sb.from('orders')
+    .select('*, order_items(*, products(name))')
+    .order('created_at', { ascending: false })
+    .limit(200);
+  if (error) console.error('[perfusky] error cargando pedidos:', error);
+  state.orders = data || [];
+  state.ordersLoaded = true;
+  state.metricsLoading = false;
+  render();
 }
 
 async function saveBanner() {
@@ -448,6 +533,63 @@ function refreshSuperOfferForm() {
   initLucide();
 }
 
+// ---------- Admin: coupons ----------
+
+function resetCouponForm() {
+  state.editingCouponId = null;
+  render();
+}
+
+function editCoupon(id) {
+  const c = state.coupons.find(c => c.id === id);
+  if (!c) return;
+  state.editingCouponId = id;
+  render();
+  document.getElementById('coupon-type').value = c.discountType;
+  window.scrollTo({ top: document.querySelector('[data-r="admin-wrap"]').offsetTop, behavior: 'smooth' });
+}
+
+async function removeCoupon(id) {
+  const { error } = await sb.from('coupons').delete().eq('id', id);
+  if (error) { console.error('[perfusky] error borrando cupón:', error); return; }
+  state.coupons = state.coupons.filter(c => c.id !== id);
+  if (state.editingCouponId === id) state.editingCouponId = null;
+  render();
+}
+
+async function toggleCouponActive(id, checked) {
+  const { error } = await sb.from('coupons').update({ active: checked }).eq('id', id);
+  if (error) { console.error('[perfusky] error actualizando cupón:', error); return; }
+  const c = state.coupons.find(c => c.id === id);
+  if (c) c.active = checked;
+  render();
+}
+
+async function saveCouponClick() {
+  const code = document.getElementById('coupon-code').value.trim().toUpperCase();
+  if (!code) return;
+  const discountType = document.getElementById('coupon-type').value;
+  const discountValue = document.getElementById('coupon-value').value;
+  const expiresAt = document.getElementById('coupon-expires').value;
+  const payload = {
+    code,
+    discount_type: discountType,
+    discount_value: discountValue || 0,
+    expires_at: expiresAt || null
+  };
+  const editingId = state.editingCouponId;
+  if (editingId) {
+    const { data, error } = await sb.from('coupons').update(payload).eq('id', editingId).select().single();
+    if (error) { console.error('[perfusky] error guardando cupón:', error); return; }
+    state.coupons = state.coupons.map(c => c.id === editingId ? dbCouponToUi(data) : c);
+  } else {
+    const { data, error } = await sb.from('coupons').insert({ ...payload, active: true }).select().single();
+    if (error) { console.error('[perfusky] error creando cupón:', error); return; }
+    state.coupons.push(dbCouponToUi(data));
+  }
+  resetCouponForm();
+}
+
 async function uploadImage(file) {
   const path = `${Date.now()}-${file.name}`.replace(/[^a-zA-Z0-9._-]/g, '_');
   const { error } = await sb.storage.from(PRODUCT_IMAGES_BUCKET).upload(path, file, { upsert: true });
@@ -477,20 +619,68 @@ function removeFromCart(id) {
   render();
 }
 
-async function sendCartWhatsapp() {
-  const lineItems = state.cart.map(c => {
+// ---------- Cart totals & coupons ----------
+
+function cartLineItems() {
+  return state.cart.map(c => {
     const prod = state.products.find(p => p.id === c.id);
     if (!prod) return null;
     const price = parseFloat(prod.onSale && prod.salePrice ? prod.salePrice : prod.price) || 0;
     return { prod, qty: c.qty, price };
   }).filter(Boolean);
-  const total = lineItems.reduce((sum, li) => sum + li.price * li.qty, 0);
+}
+
+function cartSubtotal(lineItems) {
+  return lineItems.reduce((sum, li) => sum + li.price * li.qty, 0);
+}
+
+// Client-side re-validation of the coupon (don't trust that whatever is sitting in
+// state.coupons is still usable — an authenticated admin browsing their own storefront
+// sees inactive/expired coupons too, since RLS lifts the public filter for them).
+function couponDiscount(subtotal, coupon) {
+  if (!coupon) return 0;
+  if (!coupon.active) return 0;
+  if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < Date.now()) return 0;
+  const value = parseFloat(coupon.discountValue) || 0;
+  if (coupon.discountType === 'percent') return subtotal * (value / 100);
+  return Math.min(value, subtotal);
+}
+
+function findCouponByCode(code) {
+  const normalized = code.trim().toUpperCase();
+  if (!normalized) return null;
+  return state.coupons.find(c => c.code.toUpperCase() === normalized) || null;
+}
+
+function applyCouponClick() {
+  const input = document.getElementById('cart-coupon-input');
+  const raw = input ? input.value : '';
+  const coupon = findCouponByCode(raw);
+  const subtotal = cartSubtotal(cartLineItems());
+  if (!coupon || couponDiscount(subtotal, coupon) <= 0) {
+    setState({ appliedCoupon: null, couponError: 'Cupón inválido o vencido' });
+    return;
+  }
+  setState({ appliedCoupon: coupon, couponError: '' });
+}
+
+function removeAppliedCoupon() {
+  setState({ appliedCoupon: null, couponError: '' });
+}
+
+async function sendCartWhatsapp() {
+  const lineItems = cartLineItems();
+  const subtotal = cartSubtotal(lineItems);
+  const discount = couponDiscount(subtotal, state.appliedCoupon);
+  const total = subtotal - discount;
 
   try {
     const { data: order, error: orderErr } = await sb.from('orders').insert({
       customer_phone: null,
       total: total.toFixed(2),
-      status: 'pending'
+      status: 'pending',
+      coupon_code: discount > 0 ? state.appliedCoupon.code : null,
+      discount_amount: discount.toFixed(2)
     }).select().single();
     if (orderErr) throw orderErr;
     const itemRows = lineItems.map(li => ({
@@ -507,7 +697,9 @@ async function sendCartWhatsapp() {
   }
 
   const itemsText = lineItems.map(li => `• ${li.prod.name} x${li.qty} ($${li.price})`).join('\n');
-  const msg = `Hola! Quiero estos productos:\n\n${itemsText}\n\nTotal: $${total.toFixed(2)}`;
+  let msg = `Hola! Quiero estos productos:\n\n${itemsText}\n\nSubtotal: $${subtotal.toFixed(2)}`;
+  if (discount > 0) msg += `\nCupón ${state.appliedCoupon.code}: -$${discount.toFixed(2)}`;
+  msg += `\nTotal: $${total.toFixed(2)}`;
   window.open(waLink(msg), '_blank');
 }
 
@@ -597,6 +789,7 @@ async function saveProduct() {
   const desc = document.getElementById('prod-desc').value;
   const oldPriceEl = document.getElementById('prod-old-price');
   const salePriceEl = document.getElementById('prod-sale-price');
+  const stockRaw = document.getElementById('prod-stock').value.trim();
   const payload = {
     name,
     category_id: category ? Number(category) : null,
@@ -607,7 +800,8 @@ async function saveProduct() {
     image_zoom: state.prodZoom,
     on_sale: state.prodOnSale,
     old_price: state.prodOnSale && oldPriceEl ? (oldPriceEl.value || null) : null,
-    sale_price: state.prodOnSale && salePriceEl ? (salePriceEl.value || null) : null
+    sale_price: state.prodOnSale && salePriceEl ? (salePriceEl.value || null) : null,
+    stock: stockRaw === '' ? null : Math.max(0, parseInt(stockRaw, 10) || 0)
   };
   const editingId = state.editingId;
   if (editingId) {
@@ -639,6 +833,7 @@ function refreshProductForm() {
     'prod-name': read('prod-name'),
     'prod-category': read('prod-category'),
     'prod-price': read('prod-price'),
+    'prod-stock': read('prod-stock'),
     'prod-desc': read('prod-desc'),
     'prod-old-price': read('prod-old-price'),
     'prod-sale-price': read('prod-sale-price')
@@ -737,13 +932,34 @@ function getCatName(id) {
   return c ? c.name : '';
 }
 
+function normalizeText(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+// 0 = coincidencia exacta de nombre, 1 = nombre empieza con el término,
+// 2 = nombre contiene el término, 3 = solo matchea por descripción/categoría.
+function searchRank(p, term) {
+  const name = normalizeText(p.name);
+  if (name === term) return 0;
+  if (name.startsWith(term)) return 1;
+  if (name.includes(term)) return 2;
+  return 3;
+}
+
 function filteredProducts() {
-  return state.products.filter(p => {
-    const matchCat = !state.selectedCategory || p.categoryId === state.selectedCategory;
-    const term = state.searchTerm.toLowerCase();
-    const matchSearch = !term || p.name.toLowerCase().includes(term) || (p.description || '').toLowerCase().includes(term);
-    return matchCat && matchSearch;
+  const byCategory = state.products.filter(p => !state.selectedCategory || p.categoryId === state.selectedCategory);
+  const term = normalizeText(state.searchTerm).trim();
+  if (!term) return byCategory;
+
+  const words = term.split(/\s+/).filter(Boolean);
+  const matched = byCategory.filter(p => {
+    const haystack = normalizeText(p.name) + ' ' + normalizeText(p.description) + ' ' + normalizeText(getCatName(p.categoryId));
+    return words.every(w => haystack.includes(w));
   });
+  return matched
+    .map((p, i) => ({ p, i, rank: searchRank(p, term) }))
+    .sort((a, b) => a.rank - b.rank || a.i - b.i)
+    .map(x => x.p);
 }
 
 function activeSuperOffers() {
@@ -804,6 +1020,9 @@ function renderHeader() {
           <button data-action="toggle-cat-menu" class="mobile-cat-btn" style="display: none; width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: white; align-items: center; justify-content: center; flex-shrink: 0">
             <i data-lucide="menu" style="width: 18px; height: 18px"></i>
           </button>
+          <button data-action="toggle-theme" class="theme-toggle" title="${state.theme === 'dark' ? 'Modo claro' : 'Modo oscuro'}" style="width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.1); color: white; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.2s, transform 0.2s">
+            <i data-lucide="${state.theme === 'dark' ? 'sun' : 'moon'}" style="width: 17px; height: 17px"></i>
+          </button>
           <div style="position: relative">
             <input id="search-input" type="text" placeholder="Buscar productos..." style="padding: 10px 18px 10px 40px; border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.08); color: white; font-family: inherit; font-size: 13px; width: 240px; outline: none" data-r="search-input" value="${esc(state.searchTerm)}">
             <i data-lucide="search" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: rgba(255,255,255,0.4); width: 16px; height: 16px"></i>
@@ -819,8 +1038,8 @@ function renderHeader() {
 
 function catMenuItemsHTML(selectAction, hPad) {
   const allSelected = !state.selectedCategory;
-  const rowStyle = (active) => `display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; padding: 12px ${hPad}px; background: none; border: none; font-family: inherit; font-size: 13px; font-weight: ${active ? '600' : '400'}; color: ${active ? '#2d3436' : '#666'}; cursor: pointer; white-space: nowrap`;
-  const checkIcon = `<i data-lucide="check" style="width: 14px; height: 14px; color: #2d3436; flex-shrink: 0"></i>`;
+  const rowStyle = (active) => `display: flex; align-items: center; justify-content: space-between; width: 100%; text-align: left; padding: 12px ${hPad}px; background: none; border: none; font-family: inherit; font-size: 13px; font-weight: ${active ? '600' : '400'}; color: ${active ? 'var(--text)' : 'var(--text-secondary)'}; cursor: pointer; white-space: nowrap`;
+  const checkIcon = `<i data-lucide="check" style="width: 14px; height: 14px; color: var(--text); flex-shrink: 0"></i>`;
   const items = state.categories.map(c => {
     const active = state.selectedCategory === c.id;
     return `<button data-action="${selectAction}" data-id="${c.id}" style="${rowStyle(active)}"><span>${esc(c.name)}</span>${active ? checkIcon : ''}</button>`;
@@ -832,10 +1051,10 @@ function renderMobileCatMenu() {
   if (!state.catMenuOpen) return '';
   return `
     <div data-action="close-cat-menu" style="position: fixed; inset: 0; z-index: 150; background: rgba(0,0,0,0.4)"></div>
-    <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 151; background: white; border-radius: 0 0 16px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto; animation: fadeIn 0.2s ease">
-      <div style="padding: 16px 20px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between">
-        <span style="font-size: 14px; font-weight: 700; color: #2d3436; text-transform: uppercase; letter-spacing: 1px">Categorías</span>
-        <button data-action="close-cat-menu" class="link-btn" style="background: none; border: none; color: #aaa; font-size: 22px; line-height: 1; padding: 4px">×</button>
+    <div style="position: fixed; top: 0; left: 0; right: 0; z-index: 151; background: var(--surface); border-radius: 0 0 16px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); max-height: 80vh; overflow-y: auto; animation: fadeIn 0.2s ease">
+      <div style="padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between">
+        <span style="font-size: 14px; font-weight: 700; color: var(--text); text-transform: uppercase; letter-spacing: 1px">Categorías</span>
+        <button data-action="close-cat-menu" class="link-btn" style="background: none; border: none; color: var(--text-faint); font-size: 22px; line-height: 1; padding: 4px">×</button>
       </div>
       <div style="padding: 6px 0 8px">${catMenuItemsHTML('select-cat-mobile', 20)}</div>
     </div>`;
@@ -945,16 +1164,16 @@ function renderSuperOfferSection() {
 function renderCatFilter() {
   const current = state.selectedCategory ? (state.categories.find(c => c.id === state.selectedCategory)?.name || 'Todos') : 'Todos';
   return `
-    <div data-r="cat-tabs" style="padding: 14px 40px; background: white; border-bottom: 1px solid #eee; display: flex; align-items: center; margin-top: 8px">
+    <div data-r="cat-tabs" style="padding: 14px 40px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; margin-top: 8px">
       <div style="position: relative; display: inline-block">
-        <button data-action="toggle-cat-filter" style="display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 24px; border: 2px solid ${state.desktopCatMenuOpen ? '#2d3436' : '#e0e0e0'}; background: white; font-family: inherit; font-size: 13px; font-weight: 600; color: #2d3436">
-          <i data-lucide="sliders-horizontal" style="width: 14px; height: 14px; color: #888"></i>
+        <button data-action="toggle-cat-filter" style="display: inline-flex; align-items: center; gap: 8px; padding: 9px 16px; border-radius: 24px; border: 2px solid ${state.desktopCatMenuOpen ? 'var(--text)' : 'var(--border-strong)'}; background: var(--surface); font-family: inherit; font-size: 13px; font-weight: 600; color: var(--text)">
+          <i data-lucide="sliders-horizontal" style="width: 14px; height: 14px; color: var(--text-muted)"></i>
           <span>Categoría: ${esc(current)}</span>
-          <i data-lucide="chevron-down" style="width: 14px; height: 14px; color: #888; transition: transform 0.2s; transform: rotate(${state.desktopCatMenuOpen ? '180deg' : '0deg'})"></i>
+          <i data-lucide="chevron-down" style="width: 14px; height: 14px; color: var(--text-muted); transition: transform 0.2s; transform: rotate(${state.desktopCatMenuOpen ? '180deg' : '0deg'})"></i>
         </button>
         ${state.desktopCatMenuOpen ? `
         <div data-action="close-cat-filter" style="position: fixed; inset: 0; z-index: 60"></div>
-        <div style="position: absolute; top: calc(100% + 8px); left: 0; min-width: 200px; background: white; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.15); border: 1px solid #eee; z-index: 61; overflow: hidden; animation: fadeIn 0.15s ease; padding: 6px 0">
+        <div style="position: absolute; top: calc(100% + 8px); left: 0; min-width: 200px; background: var(--surface); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.15); border: 1px solid var(--border); z-index: 61; overflow: hidden; animation: fadeIn 0.15s ease; padding: 6px 0">
           ${catMenuItemsHTML('select-cat-desktop', 16)}
         </div>` : ''}
       </div>
@@ -966,10 +1185,10 @@ function shareMenu(p) {
   const text = productShareText(p);
   const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(text + ' ' + url)}`;
   const feedback = state.shareFeedback && state.shareFeedback.id === p.id ? state.shareFeedback.msg : '';
-  const itemStyle = 'display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 14px; background: none; border: none; font-family: inherit; font-size: 13px; color: #2d3436; cursor: pointer; text-decoration: none; white-space: nowrap';
+  const itemStyle = 'display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 14px; background: none; border: none; font-family: inherit; font-size: 13px; color: var(--text); cursor: pointer; text-decoration: none; white-space: nowrap';
   return `
     <div data-action="close-share-menu" style="position: fixed; inset: 0; z-index: 15"></div>
-    <div style="position: absolute; top: 46px; right: 8px; min-width: 195px; background: white; border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.2); border: 1px solid #eee; z-index: 16; overflow: hidden; animation: fadeIn 0.15s ease; padding: 6px 0">
+    <div style="position: absolute; top: 46px; right: 8px; min-width: 195px; background: var(--surface); border-radius: 12px; box-shadow: 0 12px 32px rgba(0,0,0,0.2); border: 1px solid var(--border); z-index: 16; overflow: hidden; animation: fadeIn 0.15s ease; padding: 6px 0">
       <a href="${waUrl}" target="_blank" data-action="close-share-menu" style="${itemStyle}">
         <i data-lucide="message-circle" style="width: 15px; height: 15px; color: #25d366"></i> WhatsApp
       </a>
@@ -977,10 +1196,10 @@ function shareMenu(p) {
         <i data-lucide="camera" style="width: 15px; height: 15px; color: #c13584"></i> Instagram
       </button>
       <button data-action="share-native" data-id="${p.id}" style="${itemStyle}">
-        <i data-lucide="share-2" style="width: 15px; height: 15px; color: #666"></i> Otras apps
+        <i data-lucide="share-2" style="width: 15px; height: 15px; color: var(--text-secondary)"></i> Otras apps
       </button>
       <button data-action="share-copy" data-id="${p.id}" style="${itemStyle}">
-        <i data-lucide="link-2" style="width: 15px; height: 15px; color: #666"></i> Copiar enlace
+        <i data-lucide="link-2" style="width: 15px; height: 15px; color: var(--text-secondary)"></i> Copiar enlace
       </button>
       ${feedback ? `<div style="padding: 6px 14px 8px; font-size: 11px; color: #25d366; font-weight: 600">${esc(feedback)}</div>` : ''}
     </div>`;
@@ -990,14 +1209,15 @@ function productCard(p) {
   const catName = getCatName(p.categoryId);
   const inCart = state.cart.some(c => c.id === p.id);
   const finalPrice = p.onSale && p.salePrice ? `$${p.salePrice}` : (p.price ? `$${p.price}` : '');
-  const priceColor = p.onSale ? '#e74c3c' : '#2d3436';
+  const priceColor = p.onSale ? '#e74c3c' : 'var(--text)';
   const zoomScale = (p.zoom || 100) / 100;
+  const outOfStock = p.stock !== null && p.stock !== undefined && Number(p.stock) <= 0;
   return `
-    <div class="card" style="background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); animation: fadeIn 0.3s ease; transition: transform 0.3s ease, box-shadow 0.3s ease">
-      <div data-r="card-img" ${p.image ? `data-action="open-lightbox" data-id="${p.id}"` : ''} style="width: 100%; aspect-ratio: 3/4; background: #f0ece6; display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; ${p.image ? 'cursor: pointer' : ''}">
+    <div class="card" style="background: var(--surface); border-radius: 12px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.06); animation: fadeIn 0.3s ease; transition: transform 0.3s ease, box-shadow 0.3s ease, background 0.2s ease">
+      <div data-r="card-img" ${p.image ? `data-action="open-lightbox" data-id="${p.id}"` : ''} style="width: 100%; aspect-ratio: 3/4; background: var(--surface-alt); display: flex; align-items: center; justify-content: center; overflow: hidden; position: relative; ${p.image ? 'cursor: pointer' : ''}">
         ${p.image
           ? `<img src="${esc(p.image)}" style="width: 100%; height: 100%; object-fit: cover; transform: scale(${zoomScale})" alt="${esc(p.name)}">`
-          : `<span style="color: #ccc; font-size: 48px">📷</span>`}
+          : `<span style="color: var(--text-ghost); font-size: 48px">📷</span>`}
         <button data-action="toggle-share" data-id="${p.id}" style="position: absolute; top: 8px; right: 8px; width: 32px; height: 32px; border-radius: 50%; background: rgba(10,10,10,0.5); border: none; color: white; display: flex; align-items: center; justify-content: center; z-index: 2">
           <i data-lucide="share-2" style="width: 15px; height: 15px"></i>
         </button>
@@ -1006,10 +1226,11 @@ function productCard(p) {
       <div data-r="card-info" style="padding: 16px">
         <div style="font-size: 11px; color: #d4a574; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px">${esc(catName)}</div>
         <div style="font-size: 15px; font-weight: 600; margin-bottom: 6px">${esc(p.name)}</div>
-        <div style="font-size: 12px; color: #888; line-height: 1.5; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">${esc(p.description)}</div>
-        ${p.onSale ? `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
-          <span style="background: #e74c3c; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px">Oferta</span>
-          <span style="font-size: 13px; color: #bbb; text-decoration: line-through">${p.oldPrice ? esc('$' + p.oldPrice) : ''}</span>
+        <div style="font-size: 12px; color: var(--text-muted); line-height: 1.5; margin-bottom: 12px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden">${esc(p.description)}</div>
+        ${p.onSale || outOfStock ? `<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px">
+          ${p.onSale ? `<span style="background: #e74c3c; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px">Oferta</span>` : ''}
+          ${outOfStock ? `<span style="background: #888; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px">Sin stock</span>` : ''}
+          ${p.onSale ? `<span style="font-size: 13px; color: var(--text-faint); text-decoration: line-through">${p.oldPrice ? esc('$' + p.oldPrice) : ''}</span>` : ''}
         </div>` : ''}
         <div data-r="card-price" style="display: flex; flex-direction: column; gap: 10px">
           <span style="font-size: 18px; font-weight: 700; color: ${priceColor}">${esc(finalPrice)}</span>
@@ -1017,9 +1238,11 @@ function productCard(p) {
             <a href="${waLink('Hola! Me interesa: ' + p.name + (finalPrice ? ' - ' + finalPrice : ''))}" target="_blank" class="wa-btn" style="flex: 1; background: #25d366; color: #fff; padding: 8px 10px; border-radius: 30px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s">
               <i data-lucide="heart" style="width: 13px; height: 13px"></i> Lo quiero
             </a>
-            <button data-action="add-to-cart" data-id="${p.id}" class="save-btn" style="flex: 1; background: ${inCart ? '#4c5658' : '#2d3436'}; color: #fff; padding: 8px 10px; border-radius: 30px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; font-family: inherit; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s">
+            ${outOfStock
+              ? `<button disabled class="save-btn" style="flex: 1; background: #ccc; color: #fff; padding: 8px 10px; border-radius: 30px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; font-family: inherit; cursor: not-allowed">Sin stock</button>`
+              : `<button data-action="add-to-cart" data-id="${p.id}" class="save-btn" style="flex: 1; background: ${inCart ? '#4c5658' : '#2d3436'}; color: #fff; padding: 8px 10px; border-radius: 30px; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: none; font-family: inherit; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s">
               <i data-lucide="${inCart ? 'check' : 'shopping-cart'}" style="width: 13px; height: 13px"></i> ${inCart ? 'Agregado' : 'Agregar'}
-            </button>
+            </button>`}
           </div>
         </div>
       </div>
@@ -1030,7 +1253,7 @@ function renderGrid() {
   const filtered = filteredProducts();
   if (filtered.length === 0) {
     return `
-      <div style="text-align: center; padding: 80px 20px; color: #aaa">
+      <div style="text-align: center; padding: 80px 20px; color: var(--text-faint)">
         <div style="font-size: 48px; margin-bottom: 16px">📦</div>
         <div style="font-size: 16px; font-weight: 500">No hay productos</div>
         <div style="font-size: 13px; margin-top: 4px">Agrega productos desde el panel de admin</div>
@@ -1060,22 +1283,22 @@ function cartItemRow(c) {
   const price = prod.onSale && prod.salePrice ? prod.salePrice : prod.price;
   const subtotal = ((parseFloat(price) || 0) * c.qty).toFixed(2);
   return `
-    <div style="display: flex; gap: 12px; padding: 12px; background: #faf9f7; border-radius: 10px">
-      <div style="width: 60px; height: 60px; border-radius: 8px; background: #f0ece6; overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center">
-        ${prod.image ? `<img src="${esc(prod.image)}" style="width: 100%; height: 100%; object-fit: cover">` : `<span style="color: #ccc; font-size: 20px">📷</span>`}
+    <div style="display: flex; gap: 12px; padding: 12px; background: var(--surface-soft); border-radius: 10px">
+      <div style="width: 60px; height: 60px; border-radius: 8px; background: var(--surface-alt); overflow: hidden; flex-shrink: 0; display: flex; align-items: center; justify-content: center">
+        ${prod.image ? `<img src="${esc(prod.image)}" style="width: 100%; height: 100%; object-fit: cover">` : `<span style="color: var(--text-ghost); font-size: 20px">📷</span>`}
       </div>
       <div style="flex: 1; min-width: 0">
         <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px">${esc(prod.name)}</div>
-        <div style="font-size: 12px; color: #888; margin-bottom: 8px">${price ? esc('$' + price) : ''} c/u</div>
+        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 8px">${price ? esc('$' + price) : ''} c/u</div>
         <div style="display: flex; align-items: center; justify-content: space-between">
-          <div style="display: flex; align-items: center; gap: 0; border: 1px solid #e0e0e0; border-radius: 8px; overflow: hidden">
-            <button data-action="cart-dec" data-id="${c.id}" class="qty-btn" style="width: 28px; height: 28px; background: #f5f5f5; border: none; font-size: 14px; font-weight: 600; color: #666; display: flex; align-items: center; justify-content: center">−</button>
+          <div style="display: flex; align-items: center; gap: 0; border: 1px solid var(--border-strong); border-radius: 8px; overflow: hidden">
+            <button data-action="cart-dec" data-id="${c.id}" class="qty-btn" style="width: 28px; height: 28px; background: var(--surface-hover); border: none; font-size: 14px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; justify-content: center">−</button>
             <span style="width: 30px; text-align: center; font-size: 13px; font-weight: 600">${c.qty}</span>
-            <button data-action="cart-inc" data-id="${c.id}" class="qty-btn" style="width: 28px; height: 28px; background: #f5f5f5; border: none; font-size: 14px; font-weight: 600; color: #666; display: flex; align-items: center; justify-content: center">+</button>
+            <button data-action="cart-inc" data-id="${c.id}" class="qty-btn" style="width: 28px; height: 28px; background: var(--surface-hover); border: none; font-size: 14px; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; justify-content: center">+</button>
           </div>
           <div style="display: flex; align-items: center; gap: 8px">
-            <span style="font-size: 14px; font-weight: 700; color: #2d3436">$${subtotal}</span>
-            <button data-action="cart-remove" data-id="${c.id}" class="remove-btn" style="background: none; border: none; color: #ccc; padding: 2px">
+            <span style="font-size: 14px; font-weight: 700; color: var(--text)">$${subtotal}</span>
+            <button data-action="cart-remove" data-id="${c.id}" class="remove-btn" style="background: none; border: none; color: var(--text-ghost); padding: 2px">
               <i data-lucide="trash-2" style="width: 14px; height: 14px"></i>
             </button>
           </div>
@@ -1087,27 +1310,24 @@ function cartItemRow(c) {
 function renderCartDrawer() {
   if (!state.cartOpen) return '';
   const cartCount = state.cart.reduce((sum, c) => sum + c.qty, 0);
-  const cartTotal = state.cart.reduce((sum, c) => {
-    const prod = state.products.find(p => p.id === c.id);
-    if (!prod) return sum;
-    const price = parseFloat(prod.onSale && prod.salePrice ? prod.salePrice : prod.price) || 0;
-    return sum + price * c.qty;
-  }, 0).toFixed(2);
+  const subtotal = cartSubtotal(cartLineItems());
+  const discount = couponDiscount(subtotal, state.appliedCoupon);
+  const total = (subtotal - discount).toFixed(2);
   return `
     <div style="position: fixed; inset: 0; z-index: 200; display: flex; justify-content: flex-end">
       <div data-action="close-cart" style="position: absolute; inset: 0; background: rgba(0,0,0,0.5)"></div>
-      <div style="position: relative; width: 380px; max-width: 90vw; background: white; height: 100%; box-shadow: -8px 0 30px rgba(0,0,0,0.15); display: flex; flex-direction: column; z-index: 1; animation: fadeIn 0.2s ease">
-        <div style="padding: 20px 24px; border-bottom: 1px solid #eee; display: flex; align-items: center; justify-content: space-between">
+      <div style="position: relative; width: 380px; max-width: 90vw; background: var(--surface); height: 100%; box-shadow: -8px 0 30px rgba(0,0,0,0.15); display: flex; flex-direction: column; z-index: 1; animation: fadeIn 0.2s ease">
+        <div style="padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between">
           <div style="display: flex; align-items: center; gap: 8px">
-            <i data-lucide="shopping-cart" style="width: 20px; height: 20px; color: #2d3436"></i>
-            <span style="font-size: 18px; font-weight: 700; color: #2d3436">Mi Carrito</span>
-            <span style="background: #f0f0f0; color: #666; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px">${cartCount}</span>
+            <i data-lucide="shopping-cart" style="width: 20px; height: 20px; color: var(--text)"></i>
+            <span style="font-size: 18px; font-weight: 700; color: var(--text)">Mi Carrito</span>
+            <span style="background: var(--badge-bg); color: var(--text-secondary); font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px">${cartCount}</span>
           </div>
-          <button data-action="close-cart" class="link-btn" style="background: none; border: none; color: #aaa; font-size: 24px; line-height: 1; padding: 4px">×</button>
+          <button data-action="close-cart" class="link-btn" style="background: none; border: none; color: var(--text-faint); font-size: 24px; line-height: 1; padding: 4px">×</button>
         </div>
         <div style="flex: 1; overflow-y: auto; padding: 16px 24px">
           ${state.cart.length === 0 ? `
-          <div style="text-align: center; padding: 40px 0; color: #ccc">
+          <div style="text-align: center; padding: 40px 0; color: var(--text-ghost)">
             <i data-lucide="shopping-bag" style="width: 40px; height: 40px; margin-bottom: 12px"></i>
             <div style="font-size: 14px">Tu carrito está vacío</div>
           </div>` : ''}
@@ -1116,10 +1336,29 @@ function renderCartDrawer() {
           </div>
         </div>
         ${state.cart.length > 0 ? `
-        <div style="padding: 16px 24px; border-top: 1px solid #eee">
+        <div style="padding: 16px 24px; border-top: 1px solid var(--border)">
+          ${state.appliedCoupon ? `
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; background: var(--surface-soft); border-radius: 8px; padding: 8px 12px">
+            <span style="font-size: 12px; font-weight: 600; color: var(--text)">🏷️ ${esc(state.appliedCoupon.code)} aplicado</span>
+            <button data-action="remove-coupon-applied" class="remove-btn" style="background: none; border: none; color: var(--text-ghost); font-size: 12px">Quitar</button>
+          </div>` : `
+          <div style="display: flex; gap: 8px; margin-bottom: 12px">
+            <input id="cart-coupon-input" type="text" placeholder="¿Tenés un cupón?" style="flex: 1; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-family: inherit; font-size: 13px; outline: none">
+            <button data-action="apply-coupon" class="cancel-btn" style="background: none; border: 1px solid var(--border-strong); color: var(--text-secondary); padding: 0 16px; border-radius: 8px; font-family: inherit; font-size: 13px; font-weight: 600">Aplicar</button>
+          </div>
+          ${state.couponError ? `<div style="font-size: 12px; color: #e74c3c; margin-bottom: 12px">${esc(state.couponError)}</div>` : ''}`}
+          ${discount > 0 ? `
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px">
+            <span style="font-size: 13px; color: var(--text-muted)">Subtotal</span>
+            <span style="font-size: 13px; color: var(--text-muted)">$${subtotal.toFixed(2)}</span>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px">
+            <span style="font-size: 13px; color: #25d366">Descuento</span>
+            <span style="font-size: 13px; color: #25d366">-$${discount.toFixed(2)}</span>
+          </div>` : ''}
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
-            <span style="font-size: 15px; font-weight: 600; color: #666">Total</span>
-            <span style="font-size: 22px; font-weight: 700; color: #2d3436">$${cartTotal}</span>
+            <span style="font-size: 15px; font-weight: 600; color: var(--text-secondary)">Total</span>
+            <span style="font-size: 22px; font-weight: 700; color: var(--text)">$${total}</span>
           </div>
           <button data-action="send-cart" class="wa-btn" style="width: 100%; background: #25d366; color: white; border: none; padding: 12px 20px 12px 14px; border-radius: 30px; font-family: inherit; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 10px; box-shadow: 0 4px 12px rgba(37,211,102,0.3); transition: background 0.3s, transform 0.2s">
             <span style="width: 32px; height: 32px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="message-circle" style="width: 16px; height: 16px"></i></span> Enviar pedido por WhatsApp
@@ -1160,21 +1399,25 @@ function renderLightbox() {
   if (!p || !p.image) return '';
   const zoomScale = (p.zoom || 100) / 100;
   const finalPrice = p.onSale && p.salePrice ? `$${p.salePrice}` : (p.price ? `$${p.price}` : '');
-  const priceColor = p.onSale ? '#e74c3c' : '#2d3436';
+  const priceColor = p.onSale ? '#e74c3c' : 'var(--text)';
+  const outOfStock = p.stock !== null && p.stock !== undefined && Number(p.stock) <= 0;
   return `
     <div style="position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center; padding: 32px">
       <div data-action="close-lightbox" style="position: absolute; inset: 0; background: rgba(10,10,10,0.8)"></div>
       <div style="position: relative; width: 100%; max-width: 420px; max-height: 100%; z-index: 1; animation: fadeIn 0.2s ease; display: flex; flex-direction: column">
         <button data-action="close-lightbox" class="link-btn" style="position: absolute; top: -44px; right: 0; width: 34px; height: 34px; border-radius: 50%; background: rgba(255,255,255,0.15); border: none; color: white; font-size: 20px; line-height: 1; cursor: pointer; z-index: 2">×</button>
-        <div style="background: white; border-radius: 14px; overflow-y: auto; max-height: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.4)">
-          <div style="width: 100%; aspect-ratio: 3/4; background: #f0ece6; overflow: hidden">
+        <div style="background: var(--surface); border-radius: 14px; overflow-y: auto; max-height: 100%; box-shadow: 0 20px 60px rgba(0,0,0,0.4)">
+          <div style="width: 100%; aspect-ratio: 3/4; background: var(--surface-alt); overflow: hidden">
             <img src="${esc(p.image)}" style="width: 100%; height: 100%; object-fit: cover; transform: scale(${zoomScale})" alt="${esc(p.name)}">
           </div>
           <div style="padding: 18px 20px 22px">
             <div style="font-size: 11px; color: #d4a574; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px">${esc(getCatName(p.categoryId))}</div>
             <div style="font-size: 17px; font-weight: 700; margin-bottom: 8px">${esc(p.name)}</div>
-            ${p.description ? `<div style="font-size: 13px; color: #666; line-height: 1.6; white-space: pre-wrap; margin-bottom: 12px">${esc(p.description)}</div>` : ''}
-            ${finalPrice ? `<span style="font-size: 18px; font-weight: 700; color: ${priceColor}">${esc(finalPrice)}</span>` : ''}
+            ${p.description ? `<div style="font-size: 13px; color: var(--text-secondary); line-height: 1.6; white-space: pre-wrap; margin-bottom: 12px">${esc(p.description)}</div>` : ''}
+            <div style="display: flex; align-items: center; gap: 8px">
+              ${finalPrice ? `<span style="font-size: 18px; font-weight: 700; color: ${priceColor}">${esc(finalPrice)}</span>` : ''}
+              ${outOfStock ? `<span style="background: #888; color: white; font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px">Sin stock</span>` : ''}
+            </div>
           </div>
         </div>
       </div>
@@ -1262,6 +1505,10 @@ function renderProductForm() {
             <div>
               <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Precio</label>
               <input id="prod-price" type="text" placeholder="$0.00" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${editingProduct ? esc(editingProduct.price) : ''}">
+            </div>
+            <div>
+              <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Stock</label>
+              <input id="prod-stock" type="number" min="0" placeholder="Vacío = sin límite" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${editingProduct && editingProduct.stock !== null && editingProduct.stock !== undefined ? editingProduct.stock : ''}">
             </div>
             <div style="grid-column: 1 / -1">
               <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 10px">
@@ -1385,16 +1632,23 @@ function renderSuperOfferForm() {
     </div>`;
 }
 
-function renderAdmin() {
+function adminTabButton(tab, label) {
+  const active = state.adminTab === tab;
+  return `<button data-action="set-admin-tab" data-tab="${tab}" style="padding: 9px 18px; border-radius: 24px; border: 2px solid ${active ? '#2d3436' : '#e0e0e0'}; background: ${active ? '#2d3436' : 'white'}; color: ${active ? 'white' : '#666'}; font-family: inherit; font-size: 13px; font-weight: 600">${label}</button>`;
+}
+
+function renderAdminTabs() {
   return `
-    <div style="min-height: 100vh; background: #f5f5f5">
-      <div data-r="admin-header" style="background: #2d3436; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between">
-        <div style="display: flex; align-items: center; gap: 12px">
-          <span style="color: white; font-size: 18px; font-weight: 600">⚙️ Admin — Perfusky</span>
-        </div>
-        <button data-action="go-catalog" class="admin-back" style="background: #d4a574; border: none; color: white; padding: 8px 20px 8px 10px; border-radius: 30px; font-family: inherit; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="arrow-left" style="width: 13px; height: 13px"></i></span> Ver Catálogo</button>
-      </div>
-      <div data-r="admin-wrap" style="max-width: 900px; margin: 0 auto; padding: 32px 24px">
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px">
+      ${adminTabButton('general', 'General')}
+      ${adminTabButton('productos', 'Productos')}
+      ${adminTabButton('cupones', 'Cupones')}
+      ${adminTabButton('metricas', 'Métricas')}
+    </div>`;
+}
+
+function renderAdminGeneral() {
+  return `
         <!-- BANNER -->
         <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px">
@@ -1479,7 +1733,11 @@ function renderAdmin() {
           <div style="font-size: 12px; color: #aaa; margin-bottom: 16px">Hasta 3 ofertas. Si hay más de una activa, se muestran en un carrusel en el catálogo.</div>
           ${renderSuperOfferList()}
           ${renderSuperOfferForm()}
-        </div>
+        </div>`;
+}
+
+function renderAdminProductos() {
+  return `
         <!-- CATEGORÍAS -->
         <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
           <div style="font-size: 16px; font-weight: 600; margin-bottom: 16px">Categorías</div>
@@ -1508,7 +1766,7 @@ function renderAdmin() {
               </div>
               <div style="flex: 1; min-width: 0">
                 <div style="font-size: 14px; font-weight: 500">${esc(p.name)}</div>
-                <div style="font-size: 12px; color: #aaa">${esc(getCatName(p.categoryId))} · ${p.price ? esc('$' + p.price) : 'Sin precio'}</div>
+                <div style="font-size: 12px; color: #aaa">${esc(getCatName(p.categoryId))} · ${p.price ? esc('$' + p.price) : 'Sin precio'} · ${p.stock === null || p.stock === undefined ? 'Sin límite' : `<span style="color: ${Number(p.stock) <= 0 ? '#e74c3c' : '#aaa'}">Stock: ${p.stock}</span>`}</div>
               </div>
               <div data-r="admin-prod-actions" style="display: flex; gap: 4px">
                 <button data-action="edit-product" data-id="${p.id}" class="link-btn" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: inherit; color: #666">Editar</button>
@@ -1516,7 +1774,165 @@ function renderAdmin() {
               </div>
             </div>`).join('')}
           </div>` : `<div style="text-align: center; padding: 40px; color: #ccc; font-size: 13px">No hay productos aún. Usa el formulario de arriba para agregar.</div>`}
+        </div>`;
+}
+
+function couponBadge(c) {
+  const expired = c.expiresAt && new Date(c.expiresAt).getTime() < Date.now();
+  const value = c.discountType === 'percent' ? `${c.discountValue}%` : `$${c.discountValue}`;
+  return `
+    <div class="admin-row" style="display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid #f0f0f0; border-radius: 8px; flex-wrap: wrap">
+      <div style="flex: 1; min-width: 120px">
+        <div style="font-size: 14px; font-weight: 600; letter-spacing: 0.5px">${esc(c.code)}</div>
+        <div style="font-size: 12px; color: #aaa">${value} de descuento${c.expiresAt ? ` · vence ${esc(String(c.expiresAt).slice(0, 10))}` : ''}${expired ? ' · <span style="color: #e74c3c">vencido</span>' : ''}</div>
+      </div>
+      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12px; color: #666">
+        <input type="checkbox" data-action="toggle-coupon-active" data-id="${c.id}" ${c.active ? 'checked' : ''} style="accent-color: #25d366; width: 15px; height: 15px; cursor: pointer">
+        Activo
+      </label>
+      <div style="display: flex; gap: 4px">
+        <button data-action="edit-coupon" data-id="${c.id}" class="link-btn" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: inherit; color: #666">Editar</button>
+        <button data-action="remove-coupon" data-id="${c.id}" class="danger-btn" style="background: none; border: 1px solid #e0e0e0; padding: 6px 12px; border-radius: 6px; font-size: 12px; font-family: inherit; color: #e74c3c">Eliminar</button>
+      </div>
+    </div>`;
+}
+
+function renderAdminCupones() {
+  const editing = state.editingCouponId ? state.coupons.find(c => c.id === state.editingCouponId) : null;
+  return `
+        <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px">🏷️ Cupones de descuento</div>
+          <div style="font-size: 12px; color: #aaa; margin-bottom: 16px">Los clientes los cargan en el carrito antes de mandar el pedido por WhatsApp.</div>
+          ${state.coupons.length === 0 ? `<div style="text-align: center; padding: 16px; color: #ccc; font-size: 13px">Todavía no creaste ningún cupón.</div>` : `
+          <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px">
+            ${state.coupons.map(couponBadge).join('')}
+          </div>`}
+          <div style="display: flex; flex-direction: column; gap: 12px; border-top: 1px solid #f0f0f0; padding-top: 16px">
+            <div style="display: flex; gap: 12px; flex-wrap: wrap">
+              <div style="flex: 1; min-width: 140px">
+                <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Código</label>
+                <input id="coupon-code" type="text" placeholder="ej. PROMO10" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; text-transform: uppercase" value="${editing ? esc(editing.code) : ''}">
+              </div>
+              <div style="width: 130px">
+                <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Tipo</label>
+                <select id="coupon-type" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none; background: white">
+                  <option value="percent">Porcentaje %</option>
+                  <option value="fixed">Monto fijo $</option>
+                </select>
+              </div>
+              <div style="width: 130px">
+                <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Valor</label>
+                <input id="coupon-value" type="text" placeholder="10" style="width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${editing ? esc(editing.discountValue) : ''}">
+              </div>
+              <div style="width: 170px">
+                <label style="font-size: 12px; font-weight: 500; color: #888; margin-bottom: 4px; display: block">Vence (opcional)</label>
+                <input id="coupon-expires" type="date" style="width: 100%; padding: 9px 14px; border: 1px solid #ddd; border-radius: 8px; font-family: inherit; font-size: 13px; outline: none" value="${editing && editing.expiresAt ? esc(String(editing.expiresAt).slice(0, 10)) : ''}">
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px">
+              <button data-action="save-coupon" class="save-btn" style="background: #2d3436; color: white; border: none; padding: 9px 22px 9px 12px; border-radius: 30px; font-family: inherit; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); align-self: flex-start"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="save" style="width: 13px; height: 13px"></i></span> ${editing ? 'Guardar Cambios' : 'Agregar Cupón'}</button>
+              ${editing ? `<button data-action="cancel-edit-coupon" class="cancel-btn" style="background: none; border: 1px solid #ddd; color: #888; padding: 10px 24px; border-radius: 8px; font-family: inherit; font-size: 13px">Cancelar</button>` : ''}
+            </div>
+          </div>
+        </div>`;
+}
+
+function computeMetrics(orders) {
+  const now = Date.now();
+  const day = 24 * 60 * 60 * 1000;
+  const totalOrders = orders.length;
+  const totalRevenue = orders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
+  const last7 = orders.filter(o => now - new Date(o.created_at).getTime() <= 7 * day).length;
+  const last30 = orders.filter(o => now - new Date(o.created_at).getTime() <= 30 * day).length;
+
+  const productStats = {};
+  for (const o of orders) {
+    for (const item of (o.order_items || [])) {
+      const key = item.product_id != null ? String(item.product_id) : `deleted-${item.id}`;
+      const name = item.products && item.products.name ? item.products.name : 'Producto eliminado';
+      if (!productStats[key]) productStats[key] = { name, qty: 0, revenue: 0 };
+      productStats[key].qty += item.quantity;
+      productStats[key].revenue += parseFloat(item.subtotal) || 0;
+    }
+  }
+  const topProducts = Object.values(productStats).sort((a, b) => b.qty - a.qty).slice(0, 5);
+
+  return { totalOrders, totalRevenue, last7, last30, topProducts };
+}
+
+function metricCard(label, value) {
+  return `
+    <div style="flex: 1; min-width: 130px; background: #f8f8f8; border-radius: 10px; padding: 16px">
+      <div style="font-size: 22px; font-weight: 700; color: #2d3436">${esc(value)}</div>
+      <div style="font-size: 12px; color: #888; margin-top: 2px">${esc(label)}</div>
+    </div>`;
+}
+
+function renderAdminMetricas() {
+  if (state.metricsLoading) {
+    return `<div data-r="admin-card" style="background: white; border-radius: 12px; padding: 40px; text-align: center; color: #aaa; font-size: 13px">Cargando métricas...</div>`;
+  }
+  if (!state.ordersLoaded) {
+    return `<div data-r="admin-card" style="background: white; border-radius: 12px; padding: 40px; text-align: center; color: #aaa; font-size: 13px">No se pudieron cargar los pedidos.</div>`;
+  }
+  const m = computeMetrics(state.orders);
+  return `
+        <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 16px">📊 Resumen</div>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap">
+            ${metricCard('Pedidos totales', m.totalOrders)}
+            ${metricCard('Ingresos totales', '$' + m.totalRevenue.toFixed(2))}
+            ${metricCard('Pedidos (7 días)', m.last7)}
+            ${metricCard('Pedidos (30 días)', m.last30)}
+          </div>
         </div>
+        <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 16px">Más vendidos</div>
+          ${m.topProducts.length === 0 ? `<div style="text-align: center; padding: 16px; color: #ccc; font-size: 13px">Todavía no hay pedidos.</div>` : `
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            ${m.topProducts.map(p => `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid #f0f0f0; border-radius: 8px">
+              <span style="font-size: 13px; font-weight: 500">${esc(p.name)}</span>
+              <span style="font-size: 12px; color: #888">${p.qty} vendidos · $${p.revenue.toFixed(2)}</span>
+            </div>`).join('')}
+          </div>`}
+        </div>
+        <div data-r="admin-card" style="background: white; border-radius: 12px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.06)">
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 16px">Pedidos recientes</div>
+          ${state.orders.length === 0 ? `<div style="text-align: center; padding: 16px; color: #ccc; font-size: 13px">Todavía no hay pedidos.</div>` : `
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            ${state.orders.slice(0, 50).map(o => {
+              const itemCount = (o.order_items || []).reduce((s, i) => s + i.quantity, 0);
+              const date = new Date(o.created_at).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' });
+              return `
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border: 1px solid #f0f0f0; border-radius: 8px; flex-wrap: wrap; gap: 8px">
+              <span style="font-size: 12px; color: #aaa">${esc(date)}</span>
+              <span style="font-size: 13px">${itemCount} ítem(s)</span>
+              ${o.coupon_code ? `<span style="font-size: 11px; background: #f0f0f0; padding: 2px 8px; border-radius: 4px; color: #666">${esc(o.coupon_code)}</span>` : ''}
+              <span style="font-size: 14px; font-weight: 700">$${(parseFloat(o.total) || 0).toFixed(2)}</span>
+            </div>`;
+            }).join('')}
+          </div>`}
+        </div>`;
+}
+
+function renderAdmin() {
+  let content;
+  if (state.adminTab === 'productos') content = renderAdminProductos();
+  else if (state.adminTab === 'cupones') content = renderAdminCupones();
+  else if (state.adminTab === 'metricas') content = renderAdminMetricas();
+  else content = renderAdminGeneral();
+  return `
+    <div style="min-height: 100vh; background: #f5f5f5">
+      <div data-r="admin-header" style="background: #2d3436; padding: 16px 32px; display: flex; align-items: center; justify-content: space-between">
+        <div style="display: flex; align-items: center; gap: 12px">
+          <span style="color: white; font-size: 18px; font-weight: 600">⚙️ Admin — Perfusky</span>
+        </div>
+        <button data-action="go-catalog" class="admin-back" style="background: #d4a574; border: none; color: white; padding: 8px 20px 8px 10px; border-radius: 30px; font-family: inherit; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; box-shadow: 3px 3px 8px rgba(0,0,0,0.1); transition: background 0.3s, transform 0.2s"><span style="width: 24px; height: 24px; background: rgba(255,255,255,0.25); border-radius: 50%; display: flex; align-items: center; justify-content: center"><i data-lucide="arrow-left" style="width: 13px; height: 13px"></i></span> Ver Catálogo</button>
+      </div>
+      <div data-r="admin-wrap" style="max-width: 900px; margin: 0 auto; padding: 32px 24px">
+        ${renderAdminTabs()}
+        ${content}
       </div>
     </div>`;
 }
@@ -1524,6 +1940,7 @@ function renderAdmin() {
 // ---------- Main render ----------
 
 function render() {
+  document.documentElement.dataset.theme = state.theme;
   document.body.style.background = state.pageBgImage
     ? `linear-gradient(rgba(250,247,242,0.22), rgba(250,247,242,0.22)), url('${state.pageBgImage}') center / cover no-repeat`
     : state.pageBg;
@@ -1544,6 +1961,7 @@ app.addEventListener('click', (e) => {
   const action = el.dataset.action;
   const id = el.dataset.id;
   switch (action) {
+    case 'toggle-theme': toggleTheme(); break;
     case 'toggle-cat-menu': setState({ catMenuOpen: !state.catMenuOpen }); break;
     case 'close-cat-menu': setState({ catMenuOpen: false }); break;
     case 'select-cat-mobile': setState({ selectedCategory: id || null, catMenuOpen: false }); break;
@@ -1579,6 +1997,16 @@ app.addEventListener('click', (e) => {
     case 'remove-product': removeProduct(id); break;
     case 'save-product': saveProduct(); break;
     case 'cancel-edit': resetProductForm(); break;
+    case 'set-admin-tab':
+      setState({ adminTab: el.dataset.tab });
+      if (el.dataset.tab === 'metricas') loadOrdersForMetrics();
+      break;
+    case 'save-coupon': saveCouponClick(); break;
+    case 'edit-coupon': editCoupon(id); break;
+    case 'remove-coupon': removeCoupon(id); break;
+    case 'cancel-edit-coupon': resetCouponForm(); break;
+    case 'apply-coupon': applyCouponClick(); break;
+    case 'remove-coupon-applied': removeAppliedCoupon(); break;
     case 'open-lightbox': setState({ lightboxProductId: id }); break;
     case 'close-lightbox': setState({ lightboxProductId: null }); break;
     case 'toggle-share': setState({ shareMenuId: state.shareMenuId === id ? null : id, shareFeedback: null }); break;
@@ -1595,6 +2023,7 @@ app.addEventListener('change', (e) => {
     const action = el.dataset.action;
     if (action === 'toggle-banner') { toggleBannerActive(el.checked); return; }
     if (action === 'toggle-so-active') { toggleSuperOfferRowActive(el.dataset.id, el.checked); return; }
+    if (action === 'toggle-coupon-active') { toggleCouponActive(el.dataset.id, el.checked); return; }
     if (action === 'toggle-prod-sale') { setProdOnSale(el.checked); return; }
     if (action === 'prod-image') { onProdImageChange(e); return; }
     if (action === 'so-image') { onSuperOfferImageChange(e); return; }
@@ -1622,6 +2051,7 @@ app.addEventListener('input', (e) => {
 app.addEventListener('keydown', (e) => {
   if (e.target.id === 'login-password' && e.key === 'Enter') tryLogin();
   if (e.target.id === 'new-cat-name' && e.key === 'Enter') addCategory();
+  if (e.target.id === 'cart-coupon-input' && e.key === 'Enter') applyCouponClick();
 });
 
 document.addEventListener('keydown', (e) => {
